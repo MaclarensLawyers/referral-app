@@ -1,0 +1,11 @@
+{
+  "name": "referral-app",
+  "version": "1.0.0",
+  "description": "Fee referral tracking for Maclarens",
+  "scripts": {
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^0.9.0"
+  }
+}

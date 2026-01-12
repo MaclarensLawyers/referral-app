@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings | Maclarens</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <header>
+        <div class="header-inner">
+            <a href="/" class="logo">
+                <div class="logo-mark"></div>
+                Referral Tracking
+            </a>
+            <nav>
+                <a href="/">Matters</a>
+                <a href="/add-client.html">Add Client</a>
+                <a href="/settings.html" class="active">Settings</a>
+            </nav>
+        </div>
+    </header>
+    
+    <main class="container">
+        <div class="page-header">
+            <h1>Settings</h1>
+            <p>Configure the referral tracking system.</p>
+        </div>
+        
+        <!-- Alert messages -->
+        <div id="alert-success" class="alert alert-success" style="display: none;">
+            Successfully connected to Actionstep!
+        </div>
+        <div id="alert-error" class="alert alert-error" style="display: none;">
+            <span id="error-message"></span>
+        </div>
+        
+        <!-- Actionstep Connection -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Actionstep Connection</h2>
+                <p>Connect to Actionstep to fetch fee and time entry data.</p>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <span id="connection-status">
+                    <span class="badge badge-warning">
+                        <span class="badge-dot"></span>
+                        Checking...
+                    </span>
+                </span>
+                <a href="/api/auth-callback" id="connect-btn" class="btn btn-primary" style="display: none;">
+                    Connect to Actionstep
+                </a>
+                <a href="/api/auth-callback" id="reconnect-btn" class="btn" style="display: none;">
+                    Reconnect
+                </a>
+            </div>
+        </div>
+        
+        <!-- Referral Percentage -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Referral Percentage</h2>
+                <p>The percentage of total fees allocated to the referrer.</p>
+            </div>
+            
+            <form id="percentage-form">
+                <div class="form-group">
+                    <label for="referral-percentage">Percentage</label>
+                    <div class="input-suffix">
+                        <input 
+                            type="number" 
+                            id="referral-percentage" 
+                            name="referral_percentage"
+                            min="0" 
+                            max="100" 
+                            step="0.1"
+                            value="10"
+                        >
+                        <span>%</span>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </form>
+        </div>
+        
+        <!-- Webhook URL -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Zapier Webhook URL</h2>
+                <p>Use this URL in your Zapier workflow to send new referred matters to this app.</p>
+            </div>
+            
+            <div class="form-group">
+                <code id="webhook-url" style="
+                    display: block;
+                    padding: 0.75rem 1rem;
+                    background: var(--color-bg);
+                    border: 1px solid var(--color-border);
+                    border-radius: var(--radius);
+                    font-family: var(--font-mono);
+                    font-size: 0.8125rem;
+                    word-break: break-all;
+                ">Loading...</code>
+            </div>
+            <button class="btn btn-sm" onclick="copyWebhookUrl()">Copy URL</button>
+        </div>
+        
+        <!-- Zapier Payload Format -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Expected Payload Format</h2>
+                <p>Configure your Zapier webhook to send this JSON structure.</p>
+            </div>
+            
+            <pre style="
+                padding: 1rem;
+                background: var(--color-bg);
+                border: 1px solid var(--color-border);
+                border-radius: var(--radius);
+                font-family: var(--font-mono);
+                font-size: 0.8125rem;
+                overflow-x: auto;
+            ">{
+  "matter_id": "{{action_id}}",
+  "matter_name": "{{action_name}}",
+  "referrer_name": "{{referrer_name_from_lookup}}"
+}</pre>
+        </div>
+    </main>
+    
+    <script>
+        // Check URL params for auth status
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('auth_success')) {
+            document.getElementById('alert-success').style.display = 'block';
+            // Clean URL
+            window.history.replaceState({}, '', '/settings.html');
+        }
+        if (params.get('auth_error')) {
+            const errorAlert = document.getElementById('alert-error');
+            document.getElementById('error-message').textContent = 
+                'Authentication failed: ' + decodeURIComponent(params.get('auth_error'));
+            errorAlert.style.display = 'block';
+            window.history.replaceState({}, '', '/settings.html');
+        }
+        
+        // Load current settings
+        async function loadSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const data = await response.json();
+                
+                // Update percentage input
+                document.getElementById('referral-percentage').value = data.referral_percentage;
+                
+                // Update connection status
+                const statusEl = document.getElementById('connection-status');
+                const connectBtn = document.getElementById('connect-btn');
+                const reconnectBtn = document.getElementById('reconnect-btn');
+                
+                if (data.actionstep_connected) {
+                    statusEl.innerHTML = `
+                        <span class="badge badge-success">
+                            <span class="badge-dot"></span>
+                            Connected
+                        </span>
+                    `;
+                    reconnectBtn.style.display = 'inline-flex';
+                } else {
+                    statusEl.innerHTML = `
+                        <span class="badge badge-warning">
+                            <span class="badge-dot"></span>
+                            Not connected
+                        </span>
+                    `;
+                    connectBtn.style.display = 'inline-flex';
+                }
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        }
+        
+        // Save percentage
+        document.getElementById('percentage-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const percentage = document.getElementById('referral-percentage').value;
+            
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ referral_percentage: percentage }),
+                });
+                
+                if (response.ok) {
+                    alert('Settings saved successfully!');
+                } else {
+                    const data = await response.json();
+                    alert('Error saving settings: ' + data.error);
+                }
+            } catch (error) {
+                alert('Failed to save settings.');
+            }
+        });
+        
+        // Set webhook URL
+        document.getElementById('webhook-url').textContent = 
+            window.location.origin + '/api/webhook';
+        
+        // Copy webhook URL
+        function copyWebhookUrl() {
+            const url = window.location.origin + '/api/webhook';
+            navigator.clipboard.writeText(url).then(() => {
+                alert('URL copied to clipboard!');
+            });
+        }
+        
+        // Initialize
+        loadSettings();
+    </script>
+</body>
+</html>

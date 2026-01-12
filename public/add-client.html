@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Referred Client | Maclarens</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <header>
+        <div class="header-inner">
+            <a href="/" class="logo">
+                <div class="logo-mark"></div>
+                Referral Tracking
+            </a>
+            <nav>
+                <a href="/">Matters</a>
+                <a href="/add-client.html" class="active">Add Client</a>
+                <a href="/settings.html">Settings</a>
+            </nav>
+        </div>
+    </header>
+    
+    <main class="container">
+        <div class="page-header">
+            <h1>Add Referred Client</h1>
+            <p>Register a new client as having been referred by a staff member. When matters are created for this client, the referrer will be tracked automatically.</p>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h2>Client Registration Form</h2>
+                <p>This form saves to Zapier Tables, which is checked when new matters are created.</p>
+            </div>
+            
+            <div class="iframe-wrapper">
+                <!-- 
+                    Replace this placeholder with your actual Zapier Interface embed URL.
+                    
+                    To set this up:
+                    1. Go to Zapier Interfaces (interfaces.zapier.com)
+                    2. Create a new Interface with a Form component
+                    3. Add fields:
+                       - client_participant_id (Text, required)
+                       - client_name (Text)
+                       - referrer_name (Dropdown or Text, required)
+                    4. Connect the form to add records to your Zapier Table
+                    5. Copy the embed URL and paste it in the iframe src below
+                -->
+                <iframe 
+                    src="about:blank" 
+                    id="zapier-form"
+                    title="Add Referred Client Form"
+                ></iframe>
+                
+                <!-- Placeholder message shown until iframe is configured -->
+                <div id="form-placeholder" style="padding: 3rem; text-align: center; color: var(--color-text-muted);">
+                    <h3 style="margin-bottom: 1rem; color: var(--color-text);">Zapier Interface Form</h3>
+                    <p style="max-width: 400px; margin: 0 auto;">
+                        To complete setup, create a Zapier Interface form and update the iframe src in 
+                        <code style="background: var(--color-bg); padding: 0.125rem 0.375rem; border-radius: 2px;">add-client.html</code>.
+                    </p>
+                    <p style="max-width: 400px; margin: 1rem auto 0;">
+                        The form should collect:<br>
+                        • Client Participant ID (from Actionstep)<br>
+                        • Client Name<br>
+                        • Referrer Name
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h2>How to Find Client Participant ID</h2>
+            </div>
+            <p style="font-size: 0.875rem; color: var(--color-text-muted); line-height: 1.7;">
+                In Actionstep, navigate to the client's Contact record. The Participant ID can be found in the URL 
+                when viewing the contact (e.g., <code style="background: var(--color-bg); padding: 0.125rem 0.375rem; border-radius: 2px;">/participants/12345</code> → ID is <strong>12345</strong>).
+                Alternatively, you can find it in the contact's details panel.
+            </p>
+        </div>
+    </main>
+    
+    <script>
+        // Check if iframe has a real src and hide placeholder if so
+        document.addEventListener('DOMContentLoaded', () => {
+            const iframe = document.getElementById('zapier-form');
+            const placeholder = document.getElementById('form-placeholder');
+            
+            if (iframe.src && iframe.src !== 'about:blank') {
+                placeholder.style.display = 'none';
+            } else {
+                iframe.style.display = 'none';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Referral Tracking | Maclarens</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <header>
+        <div class="header-inner">
+            <a href="/" class="logo">
+                <div class="logo-mark"></div>
+                Referral Tracking
+            </a>
+            <nav>
+                <a href="/" class="active">Matters</a>
+                <a href="/add-client.html">Add Client</a>
+                <a href="/settings.html">Settings</a>
+            </nav>
+        </div>
+    </header>
+    
+    <main class="container">
+        <div class="page-header">
+            <h1>Referred Matters</h1>
+            <p>Track fee allocations for matters originating from staff referrals.</p>
+        </div>
+        
+        <div class="controls">
+            <div class="controls-left">
+                <div class="toggle-group">
+                    <button data-period="current_month" class="active">Current Month</button>
+                    <button data-period="all">All Time</button>
+                </div>
+            </div>
+            <div class="controls-right">
+                <button id="fetch-all-btn" class="btn btn-primary" disabled>
+                    Fetch All Fees
+                </button>
+            </div>
+        </div>
+        
+        <!-- Loading indicator -->
+        <div id="loading" style="display: none; justify-content: center; padding: 2rem;">
+            <span class="spinner"></span>
+        </div>
+        
+        <!-- Matters table -->
+        <div id="matters-table" class="table-wrapper" style="display: none;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Matter ID</th>
+                        <th>Matter Name</th>
+                        <th>Referrer</th>
+                        <th>Created</th>
+                        <th style="text-align: right;">Total Fees</th>
+                        <th>Fee Allocation</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Empty state -->
+        <div id="empty-state" class="empty-state" style="display: none;">
+            <h3>No referred matters found</h3>
+            <p>Referred matters will appear here when new matters are created for referred clients.</p>
+        </div>
+    </main>
+    
+    <script src="/js/app.js"></script>
+</body>
+</html>
