@@ -5,10 +5,13 @@ const { sql } = require('./db');
 // - ACTIONSTEP_CLIENT_ID
 // - ACTIONSTEP_CLIENT_SECRET
 // - ACTIONSTEP_API_URL (e.g., https://ap-southeast-2.actionstep.com/api/rest)
+// - ACTIONSTEP_AUTH_DOMAIN (e.g., go.actionstep.com or go.actionstepstaging.com)
 // - APP_URL (your Netlify app URL for OAuth callback)
 
-const ACTIONSTEP_AUTH_URL = 'https://api.actionstepstaging.com/api/oauth/authorize';
-const ACTIONSTEP_TOKEN_URL = 'https://api.actionstepstaging.com/api/oauth/token';
+// Default to production, but allow override for staging
+const AUTH_DOMAIN = process.env.ACTIONSTEP_AUTH_DOMAIN || 'go.actionstep.com';
+const ACTIONSTEP_AUTH_URL = `https://${AUTH_DOMAIN}/api/oauth/authorize`;
+const ACTIONSTEP_TOKEN_URL = `https://${AUTH_DOMAIN}/api/oauth/token`;
 
 /**
  * Get stored OAuth tokens from database
@@ -131,11 +134,12 @@ async function actionstepRequest(endpoint, options = {}) {
  * Returns { timeentries: [], users: {} } where users is a map of id -> user object
  */
 async function getTimeEntriesForMatter(matterId) {
-    // Actionstep API uses 'action' to refer to matters
+    // Actionstep API filtering uses the format: field_comparator=value
+    // For action (matter) ID, use action_eq
     // Include 'owner' to get user details for fee earner names
     // Filter to only billable entries
     const data = await actionstepRequest(
-        `/timeentries?action=${matterId}&include=owner&isBillable=T`
+        `/timeentries?action_eq=${matterId}&include=owner&isBillable_eq=T`
     );
     
     // Log the response structure for debugging (remove in production)
