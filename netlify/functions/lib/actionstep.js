@@ -7,8 +7,8 @@ const { sql } = require('./db');
 // - ACTIONSTEP_API_URL (e.g., https://ap-southeast-2.actionstep.com/api/rest)
 // - APP_URL (your Netlify app URL for OAuth callback)
 
-const ACTIONSTEP_AUTH_URL = 'https://go.actionstep.com/api/oauth/authorize';
-const ACTIONSTEP_TOKEN_URL = 'https://go.actionstep.com/api/oauth/token';
+const ACTIONSTEP_AUTH_URL = 'https://api.actionstepstaging.com/api/oauth/authorize';
+const ACTIONSTEP_TOKEN_URL = 'https://api.actionstepstaging.com/api/oauth/token';
 
 /**
  * Get stored OAuth tokens from database
