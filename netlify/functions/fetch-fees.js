@@ -57,26 +57,40 @@ exports.handler = async (event) => {
         
         for (const matterId of matterIds) {
             try {
-                // Fetch time entries from Actionstep
-                const timeEntries = await getTimeEntriesForMatter(matterId);
+                // Fetch time entries from Actionstep (includes owner/user data)
+                const { timeentries, users, _linkedRaw } = await getTimeEntriesForMatter(matterId);
+                
+                // Debug logging
+                console.log(`Matter ${matterId}: Found ${timeentries.length} time entries`);
+                console.log(`Matter ${matterId}: Users map has ${Object.keys(users).length} entries`);
+                if (timeentries.length > 0) {
+                    console.log(`Matter ${matterId}: Sample entry:`, JSON.stringify(timeentries[0], null, 2));
+                }
+                if (_linkedRaw) {
+                    console.log(`Matter ${matterId}: Linked data:`, JSON.stringify(_linkedRaw, null, 2));
+                }
                 
                 // Calculate totals by fee earner
                 const feeEarnerTotals = {};
                 let totalFees = 0;
                 
-                timeEntries.forEach(entry => {
-                    // Use billable amount if available, otherwise calculate from rate and hours
-                    const amount = entry.billableAmount || 
-                                   (entry.billableHours * entry.rate) || 
-                                   entry.amount || 0;
+                timeentries.forEach(entry => {
+                    // Use billableAmount directly from the API
+                    const amount = parseFloat(entry.billableAmount) || 0;
                     
-                    const ownerName = entry.ownerName || entry.owner || 'Unknown';
+                    // Get owner ID from links, then look up the name
+                    const ownerId = entry.links?.owner;
+                    const ownerUser = ownerId ? users[ownerId] : null;
+                    // User object typically has 'name' or 'firstName'/'lastName'
+                    const ownerName = ownerUser 
+                        ? (ownerUser.name || `${ownerUser.firstName || ''} ${ownerUser.lastName || ''}`.trim() || `User ${ownerId}`)
+                        : 'Unknown';
                     
                     if (!feeEarnerTotals[ownerName]) {
                         feeEarnerTotals[ownerName] = 0;
                     }
-                    feeEarnerTotals[ownerName] += parseFloat(amount);
-                    totalFees += parseFloat(amount);
+                    feeEarnerTotals[ownerName] += amount;
+                    totalFees += amount;
                 });
                 
                 // Calculate referral amount
@@ -105,6 +119,7 @@ exports.handler = async (event) => {
                     },
                     total: Math.round(totalFees * 100) / 100,
                     adjusted_total: Math.round(adjustedTotal * 100) / 100,
+                    time_entry_count: timeentries.length,
                 };
                 
                 // Store snapshot in database

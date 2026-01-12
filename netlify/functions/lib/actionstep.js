@@ -127,12 +127,40 @@ async function actionstepRequest(endpoint, options = {}) {
 }
 
 /**
- * Get time entries for a specific matter
+ * Get time entries for a specific matter with owner details
+ * Returns { timeentries: [], users: {} } where users is a map of id -> user object
  */
 async function getTimeEntriesForMatter(matterId) {
     // Actionstep API uses 'action' to refer to matters
-    const data = await actionstepRequest(`/timeentries?action=${matterId}`);
-    return data.timeentries || [];
+    // Include 'owner' to get user details for fee earner names
+    // Filter to only billable entries
+    const data = await actionstepRequest(
+        `/timeentries?action=${matterId}&include=owner&isBillable=T`
+    );
+    
+    // Log the response structure for debugging (remove in production)
+    console.log('Actionstep response keys:', Object.keys(data));
+    if (data.linked) {
+        console.log('Linked data keys:', Object.keys(data.linked));
+    }
+    
+    // Build a map of user IDs to user objects from the linked data
+    // Actionstep may return users under 'linked.users' or 'linked.participants'
+    const users = {};
+    const linkedUsers = data.linked?.users || data.linked?.participants || [];
+    
+    if (Array.isArray(linkedUsers)) {
+        linkedUsers.forEach(user => {
+            users[user.id] = user;
+        });
+    }
+    
+    return {
+        timeentries: data.timeentries || [],
+        users,
+        // Include raw linked data for debugging
+        _linkedRaw: data.linked
+    };
 }
 
 /**
