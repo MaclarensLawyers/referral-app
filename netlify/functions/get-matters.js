@@ -17,7 +17,7 @@ exports.handler = async (event) => {
 
     try {
         // Require authentication
-        verifyAuth(event);
+        await verifyAuth(event);
         const period = event.queryStringParameters?.period || 'current_month';
         
         let matters;

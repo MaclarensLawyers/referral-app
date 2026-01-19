@@ -12,7 +12,7 @@ exports.handler = async (event) => {
     try {
         if (event.httpMethod === 'GET') {
             // Require authentication for viewing settings
-            verifyAuth(event);
+            await verifyAuth(event);
             // Get current settings
             const settings = await sql`
                 SELECT key, value FROM settings 
@@ -40,7 +40,7 @@ exports.handler = async (event) => {
         
         if (event.httpMethod === 'POST') {
             // Require admin for modifying settings
-            requireAdmin(event);
+            await requireAdmin(event);
 
             const body = JSON.parse(event.body);
             

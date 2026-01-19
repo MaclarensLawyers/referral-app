@@ -5,7 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login | Maclarens Referral Tracking</title>
     <link rel="stylesheet" href="/css/styles.css">
-    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+    <script>
+        // Auth0 configuration - these values should be set via environment or build process
+        window.auth0Config = {
+            domain: '__AUTH0_DOMAIN__',
+            clientId: '__AUTH0_CLIENT_ID__',
+            audience: '__AUTH0_AUDIENCE__'
+        };
+    </script>
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
 </head>
 <body class="login-page">
     <main class="login-container">
@@ -27,50 +35,23 @@
         </div>
     </main>
 
+    <script src="/js/auth.js"></script>
     <script>
-        const hash = window.location.hash;
-        const hasToken = hash.includes('invite_token') || hash.includes('recovery_token') || hash.includes('confirmation_token');
-
-        // Wait for DOM and widget to be ready
         document.addEventListener('DOMContentLoaded', function() {
             // Set up login button
-            document.getElementById('login-btn').addEventListener('click', function() {
-                if (window.netlifyIdentity) {
-                    window.netlifyIdentity.open('login');
-                }
+            document.getElementById('login-btn').addEventListener('click', async function() {
+                await auth.login();
             });
 
-            // Initialize Netlify Identity
-            if (window.netlifyIdentity) {
-                window.netlifyIdentity.on('init', function(user) {
-                    console.log('Identity init, user:', user, 'hasToken:', hasToken);
-                    if (hasToken) {
-                        // Open widget to handle the token (invite/recovery/confirmation)
-                        window.netlifyIdentity.open();
-                    } else if (user) {
-                        // Already logged in, redirect to dashboard
-                        sessionStorage.setItem('justLoggedIn', 'true');
-                        window.location.href = sessionStorage.getItem('authRedirect') || '/';
-                        sessionStorage.removeItem('authRedirect');
-                    }
-                });
-
-                window.netlifyIdentity.on('login', function(user) {
-                    console.log('Identity login:', user);
-                    sessionStorage.setItem('justLoggedIn', 'true');
-                    var redirect = sessionStorage.getItem('authRedirect') || '/';
+            // Check if already logged in
+            auth.ready.then(() => {
+                if (auth.getUser()) {
+                    // Already logged in, redirect to dashboard
+                    const redirect = sessionStorage.getItem('authRedirect') || '/';
                     sessionStorage.removeItem('authRedirect');
                     window.location.href = redirect;
-                });
-
-                window.netlifyIdentity.on('error', function(err) {
-                    console.error('Identity error:', err);
-                });
-
-                window.netlifyIdentity.init();
-            } else {
-                console.error('Netlify Identity widget not loaded');
-            }
+                }
+            });
         });
     </script>
 </body>

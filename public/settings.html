@@ -5,7 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings | Maclarens</title>
     <link rel="stylesheet" href="/css/styles.css">
-    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+    <script>
+        // Auth0 configuration - these values should be set via environment or build process
+        window.auth0Config = {
+            domain: '__AUTH0_DOMAIN__',
+            clientId: '__AUTH0_CLIENT_ID__',
+            audience: '__AUTH0_AUDIENCE__'
+        };
+    </script>
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
 </head>
 <body>
     <header>
@@ -21,13 +29,13 @@
             </nav>
         </div>
     </header>
-    
+
     <main class="container">
         <div class="page-header">
             <h1>Settings</h1>
             <p>Configure the referral tracking system.</p>
         </div>
-        
+
         <!-- Alert messages -->
         <div id="alert-success" class="alert alert-success" style="display: none;">
             Successfully connected to Actionstep!
@@ -35,14 +43,14 @@
         <div id="alert-error" class="alert alert-error" style="display: none;">
             <span id="error-message"></span>
         </div>
-        
+
         <!-- Actionstep Connection -->
         <div class="card">
             <div class="card-header">
                 <h2>Actionstep Connection</h2>
                 <p>Connect to Actionstep to fetch fee and time entry data.</p>
             </div>
-            
+
             <div style="display: flex; align-items: center; gap: 1rem;">
                 <span id="connection-status">
                     <span class="badge badge-warning">
@@ -58,24 +66,24 @@
                 </a>
             </div>
         </div>
-        
+
         <!-- Referral Percentage -->
         <div class="card">
             <div class="card-header">
                 <h2>Referral Percentage</h2>
                 <p>The percentage of total fees allocated to the referrer.</p>
             </div>
-            
+
             <form id="percentage-form">
                 <div class="form-group">
                     <label for="referral-percentage">Percentage</label>
                     <div class="input-suffix">
-                        <input 
-                            type="number" 
-                            id="referral-percentage" 
+                        <input
+                            type="number"
+                            id="referral-percentage"
                             name="referral_percentage"
-                            min="0" 
-                            max="100" 
+                            min="0"
+                            max="100"
                             step="0.1"
                             value="10"
                         >
@@ -85,14 +93,14 @@
                 <button type="submit" class="btn btn-primary">Save</button>
             </form>
         </div>
-        
+
         <!-- Webhook URL -->
         <div class="card">
             <div class="card-header">
                 <h2>Zapier Webhook URL</h2>
                 <p>Use this URL in your Zapier workflow to send new referred matters to this app.</p>
             </div>
-            
+
             <div class="form-group">
                 <code id="webhook-url" style="
                     display: block;
@@ -107,7 +115,7 @@
             </div>
             <button class="btn btn-sm" onclick="copyWebhookUrl()">Copy URL</button>
         </div>
-        
+
         <!-- Zapier Payload Format -->
         <div class="card">
             <div class="card-header">
@@ -159,7 +167,7 @@
             </div>
         </div>
     </main>
-    
+
     <script src="/js/auth.js"></script>
     <script>
         // Check URL params for Actionstep auth status
@@ -183,7 +191,7 @@
                 const response = await fetch('/api/settings', { headers });
 
                 if (response.status === 401) {
-                    window.location.href = '/login.html';
+                    auth.login();
                     return;
                 }
 
@@ -309,7 +317,7 @@
         // Initialize after auth is ready
         auth.ready.then(() => {
             if (!auth.getUser()) {
-                window.location.href = '/login.html';
+                auth.login();
                 return;
             }
 
