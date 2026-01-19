@@ -2,9 +2,6 @@
   publish = "public"
   functions = "netlify/functions"
 
-[build.environment]
-  NETLIFY_IDENTITY_TOKEN = "true"
-
 [functions]
   node_bundler = "esbuild"
 

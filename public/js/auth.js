@@ -1,95 +1,161 @@
 /**
- * Authentication module using Netlify Identity
+ * Authentication module using Auth0 SPA SDK
  *
- * This module must be loaded after the Netlify Identity widget script.
- * Include on all protected pages to handle authentication.
+ * This module initializes Auth0 and provides authentication utilities.
+ * Include on all pages that need authentication.
+ *
+ * Required configuration (set via window.auth0Config before loading):
+ * - domain: Auth0 tenant domain
+ * - clientId: Auth0 application client ID
+ * - audience: Auth0 API audience (optional)
  */
 
-// Wait for Netlify Identity to be ready
-const authReady = new Promise((resolve) => {
-    if (window.netlifyIdentity) {
-        window.netlifyIdentity.on('init', (user) => resolve(user));
-        window.netlifyIdentity.init();
-    } else {
-        // If widget not loaded, resolve with null
-        resolve(null);
+// Auth0 client instance
+let auth0Client = null;
+let isAuthenticated = false;
+let user = null;
+
+/**
+ * Initialize Auth0 client
+ */
+async function initAuth0() {
+    const config = window.auth0Config;
+    if (!config || !config.domain || !config.clientId) {
+        console.error('Auth0 configuration missing. Set window.auth0Config before loading auth.js');
+        return null;
     }
-});
+
+    try {
+        auth0Client = await window.auth0.createAuth0Client({
+            domain: config.domain,
+            clientId: config.clientId,
+            authorizationParams: {
+                redirect_uri: window.location.origin + '/callback.html',
+                audience: config.audience,
+            },
+            cacheLocation: 'localstorage',
+        });
+
+        // Check if returning from redirect
+        const query = window.location.search;
+        if (query.includes('code=') && query.includes('state=')) {
+            await auth0Client.handleRedirectCallback();
+            // Remove query params from URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        // Check authentication status
+        isAuthenticated = await auth0Client.isAuthenticated();
+        if (isAuthenticated) {
+            user = await auth0Client.getUser();
+        }
+
+        return auth0Client;
+    } catch (error) {
+        console.error('Error initializing Auth0:', error);
+        return null;
+    }
+}
+
+// Initialize on load
+const authReady = initAuth0();
 
 /**
  * Get the current authenticated user
  * @returns {Object|null} User object or null if not authenticated
  */
 function getUser() {
-    return window.netlifyIdentity?.currentUser() || null;
+    return user;
 }
 
 /**
- * Get the current user's JWT token
- * @returns {Promise<string|null>} JWT token or null
+ * Get the current user's access token
+ * @returns {Promise<string|null>} Access token or null
  */
 async function getToken() {
-    const user = getUser();
-    if (!user) return null;
+    if (!auth0Client || !isAuthenticated) return null;
 
-    // Refresh token if needed and get current token
     try {
-        const token = await user.jwt();
+        const token = await auth0Client.getTokenSilently();
         return token;
     } catch (error) {
         console.error('Error getting token:', error);
+        // If token refresh failed, may need to re-authenticate
+        if (error.error === 'login_required') {
+            isAuthenticated = false;
+            user = null;
+        }
         return null;
     }
 }
 
 /**
  * Check if the current user has admin role
+ * Uses Auth0 RBAC roles from the token namespace
  * @returns {boolean}
  */
 function isAdmin() {
-    const user = getUser();
     if (!user) return false;
 
-    const roles = user.app_metadata?.roles || [];
+    // Auth0 roles are typically in a namespaced claim or app_metadata
+    const config = window.auth0Config || {};
+    const namespace = config.audience || `https://${config.domain}/`;
+
+    const roles = user[`${namespace}roles`] || user.roles || [];
     return roles.includes('admin');
 }
 
 /**
  * Log out the current user
+ * @param {Object} options - Logout options
+ * @param {string} options.returnTo - URL to redirect to after logout
  */
-function logout() {
-    window.netlifyIdentity?.logout();
+function logout(options = {}) {
+    if (!auth0Client) return;
+
+    auth0Client.logout({
+        logoutParams: {
+            returnTo: options.returnTo || window.location.origin + '/login.html',
+        },
+    });
 }
 
 /**
- * Open the login modal
+ * Redirect to login
+ * @param {string} [redirectUrl] - URL to redirect to after login
  */
-function openLogin() {
-    window.netlifyIdentity?.open('login');
+async function login(redirectUrl) {
+    if (!auth0Client) return;
+
+    // Store intended destination
+    const destination = redirectUrl || window.location.pathname;
+    sessionStorage.setItem('authRedirect', destination);
+
+    await auth0Client.loginWithRedirect({
+        authorizationParams: {
+            redirect_uri: window.location.origin + '/callback.html',
+        },
+    });
 }
 
 /**
  * Require authentication - redirect to login page if not authenticated
  * Call this at the top of protected page scripts
  * @param {string} [redirectUrl] - URL to redirect to after login (defaults to current page)
+ * @returns {Promise<boolean>}
  */
 async function requireAuth(redirectUrl) {
     await authReady;
 
-    const user = getUser();
-    if (!user) {
-        // Store intended destination
-        const destination = redirectUrl || window.location.pathname;
-        sessionStorage.setItem('authRedirect', destination);
-        window.location.href = '/login.html';
+    if (!isAuthenticated) {
+        await login(redirectUrl);
         return false;
     }
     return true;
 }
 
 /**
- * Handle post-login redirect
- * Call this on the login page after successful login
+ * Handle post-login redirect (call from callback page)
  */
 function handleLoginRedirect() {
     const redirect = sessionStorage.getItem('authRedirect') || '/';
@@ -134,7 +200,6 @@ async function authFetch(url, options = {}) {
  * Call this after auth is confirmed on protected pages
  */
 function updateHeaderWithUser() {
-    const user = getUser();
     if (!user) return;
 
     const nav = document.querySelector('header nav');
@@ -156,30 +221,13 @@ function updateHeaderWithUser() {
     nav.appendChild(userMenu);
 }
 
-// Set up identity event handlers
-if (window.netlifyIdentity) {
-    window.netlifyIdentity.on('login', (user) => {
-        // If on login page, redirect
-        if (window.location.pathname === '/login.html') {
-            handleLoginRedirect();
-        } else {
-            // Refresh the page to update UI
-            window.location.reload();
-        }
-    });
-
-    window.netlifyIdentity.on('logout', () => {
-        window.location.href = '/login.html';
-    });
-}
-
 // Export functions globally
 window.auth = {
     getUser,
     getToken,
     isAdmin,
     logout,
-    openLogin,
+    login,
     requireAuth,
     handleLoginRedirect,
     getAuthHeaders,

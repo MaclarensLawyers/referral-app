@@ -25,7 +25,7 @@ exports.handler = async (event) => {
 
     try {
         // Require authentication
-        verifyAuth(event);
+        await verifyAuth(event);
 
         const body = JSON.parse(event.body);
         

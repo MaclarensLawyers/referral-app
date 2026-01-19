@@ -5,7 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Add Referred Client | Maclarens</title>
     <link rel="stylesheet" href="/css/styles.css">
-    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+    <script>
+        // Auth0 configuration - these values should be set via environment or build process
+        window.auth0Config = {
+            domain: '__AUTH0_DOMAIN__',
+            clientId: '__AUTH0_CLIENT_ID__',
+            audience: '__AUTH0_AUDIENCE__'
+        };
+    </script>
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
     <style>
         .iframe-wrapper {
             min-height: 450px;
@@ -33,34 +41,34 @@
             </nav>
         </div>
     </header>
-    
+
     <main class="container">
         <div class="page-header">
             <h1>Add Referred Client</h1>
             <p>Register a new client as having been referred by a staff member. When matters are created for this client, the referrer will be tracked automatically.</p>
         </div>
-        
+
         <div class="card">
             <div class="card-header">
                 <h2>Client Registration Form</h2>
                 <p>This form saves to Zapier Tables, which is checked when new matters are created.</p>
             </div>
-            
+
             <div class="iframe-wrapper">
-                <iframe 
-                    src="https://interfaces.zapier.com/embed/page/cmkanlm4w005pl6m8vsy33lj4?noBackground=false" 
+                <iframe
+                    src="https://interfaces.zapier.com/embed/page/cmkanlm4w005pl6m8vsy33lj4?noBackground=false"
                     id="zapier-form"
                     title="Add Referred Client Form"
                 ></iframe>
             </div>
         </div>
-        
+
         <div class="card">
             <div class="card-header">
                 <h2>How to Find Client Participant ID</h2>
             </div>
             <p style="font-size: 0.875rem; color: var(--color-text-muted); line-height: 1.7;">
-                In Actionstep, navigate to the client's Contact record. The Participant ID can be found in the URL 
+                In Actionstep, navigate to the client's Contact record. The Participant ID can be found in the URL
                 when viewing the contact (e.g., <code style="background: var(--color-bg); padding: 0.125rem 0.375rem; border-radius: 2px;">/participants/12345</code> → ID is <strong>12345</strong>).
                 Alternatively, you can find it in the contact's details panel.
             </p>
@@ -72,7 +80,7 @@
         // Require authentication
         auth.ready.then(() => {
             if (!auth.getUser()) {
-                window.location.href = '/login.html';
+                auth.login();
             } else {
                 auth.updateHeaderWithUser();
             }

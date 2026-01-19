@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authenticating... | Maclarens Referral Tracking</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <script>
+        // Auth0 configuration - these values should be set via environment or build process
+        window.auth0Config = {
+            domain: '__AUTH0_DOMAIN__',
+            clientId: '__AUTH0_CLIENT_ID__',
+            audience: '__AUTH0_AUDIENCE__'
+        };
+    </script>
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
+</head>
+<body class="login-page">
+    <main class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo-mark"></div>
+                <h1>Authenticating...</h1>
+                <p>Please wait while we complete the sign-in process.</p>
+            </div>
+
+            <div class="login-content" style="display: flex; justify-content: center; padding: 2rem;">
+                <span class="spinner"></span>
+            </div>
+
+            <div id="error-state" style="display: none;">
+                <div class="alert alert-error">
+                    <span id="error-message">An error occurred during authentication.</span>
+                </div>
+                <a href="/login.html" class="btn btn-primary" style="margin-top: 1rem;">Return to Login</a>
+            </div>
+        </div>
+    </main>
+
+    <script src="/js/auth.js"></script>
+    <script>
+        // Handle the Auth0 callback
+        auth.ready.then(() => {
+            // If authentication successful, redirect to intended destination
+            if (auth.getUser()) {
+                auth.handleLoginRedirect();
+            } else {
+                // Show error state
+                document.querySelector('.login-content').style.display = 'none';
+                document.getElementById('error-state').style.display = 'block';
+            }
+        }).catch(error => {
+            console.error('Auth callback error:', error);
+            document.querySelector('.login-content').style.display = 'none';
+            document.getElementById('error-message').textContent = error.message || 'Authentication failed';
+            document.getElementById('error-state').style.display = 'block';
+        });
+    </script>
+</body>
+</html>

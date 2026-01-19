@@ -19,17 +19,18 @@ No test or lint commands are configured.
 
 ## Architecture
 
-**Stack:** Vanilla JS frontend, Netlify Functions backend, Neon PostgreSQL database, Netlify Identity auth
+**Stack:** Vanilla JS frontend, Netlify Functions backend, Neon PostgreSQL database, Auth0 authentication
 
 ```
 public/                     # Static frontend (HTML/CSS/JS)
 ├── index.html              # Main dashboard (protected)
 ├── add-client.html         # Client registration (protected)
 ├── settings.html           # Settings & admin features (protected, admin-only for some features)
-├── login.html              # Login page with Netlify Identity widget
+├── login.html              # Login page with Auth0
+├── callback.html           # Auth0 callback handler
 ├── js/
 │   ├── app.js              # Dashboard logic
-│   └── auth.js             # Frontend auth utilities
+│   └── auth.js             # Frontend auth utilities (Auth0 SPA SDK)
 └── css/styles.css          # Styling
 
 netlify/functions/          # Serverless API endpoints
@@ -56,7 +57,7 @@ netlify/functions/          # Serverless API endpoints
 
 ## Key Patterns
 
-**User Authentication:** Netlify Identity with invite-only registration. Admin role required for settings changes and inviting users. JWT tokens verified via `lib/auth.js` middleware. Frontend uses `auth.js` for token management and `auth.getAuthHeaders()` for API calls.
+**User Authentication:** Auth0 with invite-only registration. Admin role required for settings changes and inviting users. JWT tokens verified via `lib/auth.js` middleware using JWKS. Frontend uses Auth0 SPA SDK via `auth.js` for token management and `auth.getAuthHeaders()` for API calls.
 
 **Actionstep OAuth:** Tokens stored in `settings` table, auto-refreshed with 5-minute buffer before expiry. Check `actionstep.js:getAccessToken()` for token management.
 
@@ -73,7 +74,16 @@ ACTIONSTEP_CLIENT_SECRET  # OAuth client secret
 ACTIONSTEP_API_URL        # e.g., https://api.actionstepstaging.com/api/rest
 ACTIONSTEP_AUTH_DOMAIN    # e.g., go.actionstepstaging.com (default: go.actionstep.com)
 APP_URL                   # Netlify app URL for OAuth callback
+
+# Auth0 Configuration
+AUTH0_DOMAIN              # Auth0 tenant domain (e.g., your-tenant.auth0.com)
+AUTH0_AUDIENCE            # Auth0 API identifier/audience
+AUTH0_MGMT_CLIENT_ID      # Auth0 Management API client ID (for user invitations)
+AUTH0_MGMT_CLIENT_SECRET  # Auth0 Management API client secret
+AUTH0_CONNECTION          # Auth0 database connection name (default: Username-Password-Authentication)
 ```
+
+Frontend Auth0 configuration is set via `window.auth0Config` in HTML files. Replace placeholder values (`__AUTH0_DOMAIN__`, `__AUTH0_CLIENT_ID__`, `__AUTH0_AUDIENCE__`) with actual values during build or deployment.
 
 ## Database Tables
 
