@@ -28,8 +28,14 @@
                 <button id="login-btn" class="btn btn-primary btn-login">
                     Sign In
                 </button>
+                <div class="login-divider">
+                    <span>or</span>
+                </div>
+                <button id="signup-btn" class="btn btn-login">
+                    Sign Up
+                </button>
                 <p class="login-help">
-                    Don't have an account? Contact an administrator to receive an invitation.
+                    Sign up is available for Maclarens Lawyers staff only.
                 </p>
             </div>
         </div>
@@ -41,6 +47,11 @@
             // Set up login button
             document.getElementById('login-btn').addEventListener('click', async function() {
                 await auth.login();
+            });
+
+            // Set up signup button
+            document.getElementById('signup-btn').addEventListener('click', async function() {
+                await auth.signup();
             });
 
             // Check if already logged in

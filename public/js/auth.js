@@ -143,6 +143,25 @@ async function login(redirectUrl) {
 }
 
 /**
+ * Redirect to signup page
+ * @param {string} [redirectUrl] - URL to redirect to after signup
+ */
+async function signup(redirectUrl) {
+    if (!auth0Client) return;
+
+    // Store intended destination
+    const destination = redirectUrl || window.location.pathname;
+    sessionStorage.setItem('authRedirect', destination);
+
+    await auth0Client.loginWithRedirect({
+        authorizationParams: {
+            redirect_uri: window.location.origin + '/callback.html',
+            screen_hint: 'signup',
+        },
+    });
+}
+
+/**
  * Require authentication - redirect to login page if not authenticated
  * Call this at the top of protected page scripts
  * @param {string} [redirectUrl] - URL to redirect to after login (defaults to current page)
@@ -232,6 +251,7 @@ window.auth = {
     isAdmin,
     logout,
     login,
+    signup,
     requireAuth,
     handleLoginRedirect,
     getAuthHeaders,
