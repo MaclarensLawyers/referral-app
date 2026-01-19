@@ -97,9 +97,13 @@ async function getToken() {
 function isAdmin() {
     if (!user) return false;
 
-    // Auth0 roles are typically in a namespaced claim or app_metadata
+    // Auth0 roles are in a namespaced claim
+    // Ensure namespace ends with / for proper claim key format
     const config = window.auth0Config || {};
-    const namespace = config.audience || `https://${config.domain}/`;
+    let namespace = config.audience || `https://${config.domain}`;
+    if (!namespace.endsWith('/')) {
+        namespace += '/';
+    }
 
     const roles = user[`${namespace}roles`] || user.roles || [];
     return roles.includes('admin');

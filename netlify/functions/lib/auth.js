@@ -123,7 +123,11 @@ async function verifyAuth(event) {
 
     // Extract user info from Auth0 token
     // Auth0 tokens use different claim namespaces
-    const namespace = AUTH0_AUDIENCE || `https://${AUTH0_DOMAIN}/`;
+    // Ensure namespace ends with / for proper claim key format
+    let namespace = AUTH0_AUDIENCE || `https://${AUTH0_DOMAIN}`;
+    if (!namespace.endsWith('/')) {
+        namespace += '/';
+    }
 
     return {
         id: decoded.sub,
