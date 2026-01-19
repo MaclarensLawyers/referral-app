@@ -29,13 +29,13 @@
 
     <script>
         // Handle invite/recovery tokens in URL hash
-        // Netlify sends links like: /login.html#invite_token=... or #recovery_token=...
+        // Netlify sends links like: /#invite_token=... or #recovery_token=...
         const hash = window.location.hash;
+        const hasToken = hash.includes('invite_token') || hash.includes('recovery_token') || hash.includes('confirmation_token');
 
         // Initialize Netlify Identity
         window.netlifyIdentity.on('init', (user) => {
-            // Check for special tokens that require the widget to open
-            if (hash.includes('invite_token') || hash.includes('recovery_token') || hash.includes('confirmation_token')) {
+            if (hasToken) {
                 // Widget will automatically handle the token when opened
                 window.netlifyIdentity.open();
             } else if (user) {
@@ -47,6 +47,8 @@
         });
 
         window.netlifyIdentity.on('login', (user) => {
+            // Set a flag so dashboard knows we just logged in (prevents redirect loop)
+            sessionStorage.setItem('justLoggedIn', 'true');
             // After login, redirect to intended page or dashboard
             const redirect = sessionStorage.getItem('authRedirect') || '/';
             sessionStorage.removeItem('authRedirect');

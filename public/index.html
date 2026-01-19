@@ -81,14 +81,31 @@
         if (hash.includes('invite_token') || hash.includes('recovery_token') || hash.includes('confirmation_token')) {
             window.location.href = '/login.html' + hash;
         } else {
-            // Require authentication
-            auth.ready.then(() => {
-                if (!auth.getUser()) {
-                    window.location.href = '/login.html';
-                } else {
-                    auth.updateHeaderWithUser();
-                }
-            });
+            // Check if we just logged in (prevents redirect loop due to race condition)
+            const justLoggedIn = sessionStorage.getItem('justLoggedIn');
+            if (justLoggedIn) {
+                sessionStorage.removeItem('justLoggedIn');
+                // Give Identity time to initialize, then check again
+                setTimeout(() => {
+                    auth.ready.then(() => {
+                        if (auth.getUser()) {
+                            auth.updateHeaderWithUser();
+                        } else {
+                            // Still no user after delay, redirect to login
+                            window.location.href = '/login.html';
+                        }
+                    });
+                }, 500);
+            } else {
+                // Normal auth check
+                auth.ready.then(() => {
+                    if (!auth.getUser()) {
+                        window.location.href = '/login.html';
+                    } else {
+                        auth.updateHeaderWithUser();
+                    }
+                });
+            }
         }
     </script>
 </body>
