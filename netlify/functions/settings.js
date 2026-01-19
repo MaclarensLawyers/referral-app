@@ -1,15 +1,18 @@
 const { sql } = require('./lib/db');
 const { getTokens } = require('./lib/actionstep');
+const { verifyAuth, requireAdmin, handleAuthError } = require('./lib/auth');
 
 /**
  * Get or update app settings
- * 
- * GET: Retrieve current settings
- * POST: Update settings (referral_percentage)
+ *
+ * GET: Retrieve current settings (requires auth)
+ * POST: Update settings (requires admin)
  */
 exports.handler = async (event) => {
     try {
         if (event.httpMethod === 'GET') {
+            // Require authentication for viewing settings
+            verifyAuth(event);
             // Get current settings
             const settings = await sql`
                 SELECT key, value FROM settings 
@@ -36,6 +39,9 @@ exports.handler = async (event) => {
         }
         
         if (event.httpMethod === 'POST') {
+            // Require admin for modifying settings
+            requireAdmin(event);
+
             const body = JSON.parse(event.body);
             
             if (body.referral_percentage !== undefined) {
@@ -70,8 +76,13 @@ exports.handler = async (event) => {
         };
         
     } catch (error) {
+        // Handle auth errors
+        if (error.statusCode === 401 || error.statusCode === 403) {
+            return handleAuthError(error);
+        }
+
         console.error('Settings error:', error);
-        
+
         return {
             statusCode: 500,
             body: JSON.stringify({ error: 'Internal server error', details: error.message }),

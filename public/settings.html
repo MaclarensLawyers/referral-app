@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings | Maclarens</title>
     <link rel="stylesheet" href="/css/styles.css">
+    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 </head>
 <body>
     <header>
@@ -113,7 +114,7 @@
                 <h2>Expected Payload Format</h2>
                 <p>Configure your Zapier webhook to send this JSON structure.</p>
             </div>
-            
+
             <pre style="
                 padding: 1rem;
                 background: var(--color-bg);
@@ -128,38 +129,74 @@
   "referrer_name": "{{referrer_name_from_lookup}}"
 }</pre>
         </div>
+
+        <!-- User Management (Admin Only) -->
+        <div id="admin-section" class="card" style="display: none;">
+            <div class="card-header">
+                <h2>User Management</h2>
+                <p>Invite new users to the system. Only administrators can access this section.</p>
+            </div>
+
+            <form id="invite-form">
+                <div class="form-group">
+                    <label for="invite-email">Email Address</label>
+                    <input
+                        type="email"
+                        id="invite-email"
+                        name="email"
+                        placeholder="user@example.com"
+                        required
+                    >
+                </div>
+                <button type="submit" class="btn btn-primary" id="invite-btn">Send Invitation</button>
+            </form>
+
+            <div id="invite-success" class="alert alert-success" style="display: none; margin-top: 1rem;">
+                Invitation sent successfully!
+            </div>
+            <div id="invite-error" class="alert alert-error" style="display: none; margin-top: 1rem;">
+                <span id="invite-error-message"></span>
+            </div>
+        </div>
     </main>
     
+    <script src="/js/auth.js"></script>
     <script>
-        // Check URL params for auth status
+        // Check URL params for Actionstep auth status
         const params = new URLSearchParams(window.location.search);
         if (params.get('auth_success')) {
             document.getElementById('alert-success').style.display = 'block';
-            // Clean URL
             window.history.replaceState({}, '', '/settings.html');
         }
         if (params.get('auth_error')) {
             const errorAlert = document.getElementById('alert-error');
-            document.getElementById('error-message').textContent = 
+            document.getElementById('error-message').textContent =
                 'Authentication failed: ' + decodeURIComponent(params.get('auth_error'));
             errorAlert.style.display = 'block';
             window.history.replaceState({}, '', '/settings.html');
         }
-        
+
         // Load current settings
         async function loadSettings() {
             try {
-                const response = await fetch('/api/settings');
+                const headers = await auth.getAuthHeaders();
+                const response = await fetch('/api/settings', { headers });
+
+                if (response.status === 401) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+
                 const data = await response.json();
-                
+
                 // Update percentage input
                 document.getElementById('referral-percentage').value = data.referral_percentage;
-                
+
                 // Update connection status
                 const statusEl = document.getElementById('connection-status');
                 const connectBtn = document.getElementById('connect-btn');
                 const reconnectBtn = document.getElementById('reconnect-btn');
-                
+
                 if (data.actionstep_connected) {
                     statusEl.innerHTML = `
                         <span class="badge badge-success">
@@ -181,20 +218,26 @@
                 console.error('Error loading settings:', error);
             }
         }
-        
-        // Save percentage
+
+        // Save percentage (admin only)
         document.getElementById('percentage-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const percentage = document.getElementById('referral-percentage').value;
-            
+
             try {
+                const headers = await auth.getAuthHeaders();
                 const response = await fetch('/api/settings', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers,
                     body: JSON.stringify({ referral_percentage: percentage }),
                 });
-                
+
+                if (response.status === 401 || response.status === 403) {
+                    alert('You do not have permission to change settings.');
+                    return;
+                }
+
                 if (response.ok) {
                     alert('Settings saved successfully!');
                 } else {
@@ -205,11 +248,56 @@
                 alert('Failed to save settings.');
             }
         });
-        
+
+        // Invite user (admin only)
+        document.getElementById('invite-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = document.getElementById('invite-email').value;
+            const btn = document.getElementById('invite-btn');
+            const successEl = document.getElementById('invite-success');
+            const errorEl = document.getElementById('invite-error');
+
+            // Hide previous messages
+            successEl.style.display = 'none';
+            errorEl.style.display = 'none';
+
+            btn.disabled = true;
+            btn.textContent = 'Sending...';
+
+            try {
+                const headers = await auth.getAuthHeaders();
+                const response = await fetch('/api/invite-user', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ email }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    successEl.textContent = `Invitation sent to ${email}`;
+                    successEl.style.display = 'block';
+                    document.getElementById('invite-email').value = '';
+                } else {
+                    document.getElementById('invite-error-message').textContent =
+                        data.error || 'Failed to send invitation';
+                    errorEl.style.display = 'block';
+                }
+            } catch (error) {
+                document.getElementById('invite-error-message').textContent =
+                    'Failed to send invitation';
+                errorEl.style.display = 'block';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Send Invitation';
+            }
+        });
+
         // Set webhook URL
-        document.getElementById('webhook-url').textContent = 
+        document.getElementById('webhook-url').textContent =
             window.location.origin + '/api/webhook';
-        
+
         // Copy webhook URL
         function copyWebhookUrl() {
             const url = window.location.origin + '/api/webhook';
@@ -217,9 +305,23 @@
                 alert('URL copied to clipboard!');
             });
         }
-        
-        // Initialize
-        loadSettings();
+
+        // Initialize after auth is ready
+        auth.ready.then(() => {
+            if (!auth.getUser()) {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            auth.updateHeaderWithUser();
+
+            // Show admin section if user is admin
+            if (auth.isAdmin()) {
+                document.getElementById('admin-section').style.display = 'block';
+            }
+
+            loadSettings();
+        });
     </script>
 </body>
 </html>

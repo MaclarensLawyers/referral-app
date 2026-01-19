@@ -1,8 +1,9 @@
 const { sql } = require('./lib/db');
+const { verifyAuth, handleAuthError } = require('./lib/auth');
 
 /**
  * Get referred matters with optional date filtering
- * 
+ *
  * Query params:
  * - period: 'current_month' (default) or 'all'
  */
@@ -13,8 +14,10 @@ exports.handler = async (event) => {
             body: JSON.stringify({ error: 'Method not allowed' }),
         };
     }
-    
+
     try {
+        // Require authentication
+        verifyAuth(event);
         const period = event.queryStringParameters?.period || 'current_month';
         
         let matters;
@@ -83,8 +86,13 @@ exports.handler = async (event) => {
         };
         
     } catch (error) {
+        // Handle auth errors
+        if (error.statusCode === 401 || error.statusCode === 403) {
+            return handleAuthError(error);
+        }
+
         console.error('Get matters error:', error);
-        
+
         return {
             statusCode: 500,
             body: JSON.stringify({ error: 'Internal server error', details: error.message }),

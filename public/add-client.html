@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Add Referred Client | Maclarens</title>
     <link rel="stylesheet" href="/css/styles.css">
+    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
     <style>
         .iframe-wrapper {
             min-height: 450px;
@@ -65,5 +66,17 @@
             </p>
         </div>
     </main>
+
+    <script src="/js/auth.js"></script>
+    <script>
+        // Require authentication
+        auth.ready.then(() => {
+            if (!auth.getUser()) {
+                window.location.href = '/login.html';
+            } else {
+                auth.updateHeaderWithUser();
+            }
+        });
+    </script>
 </body>
 </html>

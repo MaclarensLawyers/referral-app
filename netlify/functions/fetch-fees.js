@@ -1,14 +1,15 @@
 const { sql } = require('./lib/db');
 const { getTimeEntriesForMatter } = require('./lib/actionstep');
+const { verifyAuth, handleAuthError } = require('./lib/auth');
 
 /**
  * Fetch fee data from Actionstep for specified matters
- * 
+ *
  * POST body:
  * {
  *   "matter_ids": ["12345", "67890"]
  * }
- * 
+ *
  * Or fetch for a single matter:
  * {
  *   "matter_id": "12345"
@@ -21,8 +22,11 @@ exports.handler = async (event) => {
             body: JSON.stringify({ error: 'Method not allowed' }),
         };
     }
-    
+
     try {
+        // Require authentication
+        verifyAuth(event);
+
         const body = JSON.parse(event.body);
         
         // Handle single matter_id or array of matter_ids
@@ -156,19 +160,24 @@ exports.handler = async (event) => {
         };
         
     } catch (error) {
+        // Handle user auth errors
+        if (error.statusCode === 401 || error.statusCode === 403) {
+            return handleAuthError(error);
+        }
+
         console.error('Fetch fees error:', error);
-        
-        // Check if it's an auth error
+
+        // Check if it's an Actionstep auth error
         if (error.message.includes('No access token') || error.message.includes('re-authenticate')) {
             return {
                 statusCode: 401,
-                body: JSON.stringify({ 
-                    error: 'Authentication required', 
+                body: JSON.stringify({
+                    error: 'Actionstep authentication required',
                     message: 'Please connect to Actionstep in Settings',
                 }),
             };
         }
-        
+
         return {
             statusCode: 500,
             body: JSON.stringify({ error: 'Internal server error', details: error.message }),

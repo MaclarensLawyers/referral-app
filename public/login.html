@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | Maclarens Referral Tracking</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body class="login-page">
+    <main class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo-mark"></div>
+                <h1>Referral Tracking</h1>
+                <p>Sign in to access the dashboard</p>
+            </div>
+
+            <div class="login-content">
+                <button id="login-btn" class="btn btn-primary btn-login" onclick="window.netlifyIdentity.open('login')">
+                    Sign In
+                </button>
+                <p class="login-help">
+                    Don't have an account? Contact an administrator to receive an invitation.
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // Initialize Netlify Identity
+        window.netlifyIdentity.on('init', (user) => {
+            if (user) {
+                // Already logged in, redirect
+                const redirect = sessionStorage.getItem('authRedirect') || '/';
+                sessionStorage.removeItem('authRedirect');
+                window.location.href = redirect;
+            }
+        });
+
+        window.netlifyIdentity.on('login', (user) => {
+            // After login, redirect to intended page or dashboard
+            const redirect = sessionStorage.getItem('authRedirect') || '/';
+            sessionStorage.removeItem('authRedirect');
+            window.location.href = redirect;
+        });
+
+        window.netlifyIdentity.init();
+    </script>
+</body>
+</html>

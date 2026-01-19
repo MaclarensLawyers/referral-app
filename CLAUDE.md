@@ -19,25 +19,30 @@ No test or lint commands are configured.
 
 ## Architecture
 
-**Stack:** Vanilla JS frontend, Netlify Functions backend, Neon PostgreSQL database
+**Stack:** Vanilla JS frontend, Netlify Functions backend, Neon PostgreSQL database, Netlify Identity auth
 
 ```
 public/                     # Static frontend (HTML/CSS/JS)
-├── index.html              # Main dashboard
-├── add-client.html         # Client registration (embeds Zapier form)
-├── settings.html           # Settings & Actionstep OAuth
-├── js/app.js               # Dashboard logic
+├── index.html              # Main dashboard (protected)
+├── add-client.html         # Client registration (protected)
+├── settings.html           # Settings & admin features (protected, admin-only for some features)
+├── login.html              # Login page with Netlify Identity widget
+├── js/
+│   ├── app.js              # Dashboard logic
+│   └── auth.js             # Frontend auth utilities
 └── css/styles.css          # Styling
 
 netlify/functions/          # Serverless API endpoints
 ├── lib/
 │   ├── actionstep.js       # Actionstep API client & OAuth token management
+│   ├── auth.js             # JWT verification middleware
 │   └── db.js               # Neon database connection
-├── auth-callback.js        # OAuth callback handler
-├── fetch-fees.js           # Fee calculation from Actionstep time entries
-├── get-matters.js          # List referred matters
-├── settings.js             # Settings CRUD
-└── webhook.js              # Zapier webhook receiver
+├── auth-callback.js        # Actionstep OAuth callback handler
+├── fetch-fees.js           # Fee calculation (requires auth)
+├── get-matters.js          # List referred matters (requires auth)
+├── invite-user.js          # Invite new users (requires admin)
+├── settings.js             # Settings CRUD (GET: auth, POST: admin)
+└── webhook.js              # Zapier webhook receiver (public)
 ```
 
 **API Routes:** All `/api/*` requests route to `/.netlify/functions/:splat` via netlify.toml
@@ -51,7 +56,9 @@ netlify/functions/          # Serverless API endpoints
 
 ## Key Patterns
 
-**OAuth Tokens:** Stored in `settings` table, auto-refreshed with 5-minute buffer before expiry. Check `actionstep.js:getAccessToken()` for token management.
+**User Authentication:** Netlify Identity with invite-only registration. Admin role required for settings changes and inviting users. JWT tokens verified via `lib/auth.js` middleware. Frontend uses `auth.js` for token management and `auth.getAuthHeaders()` for API calls.
+
+**Actionstep OAuth:** Tokens stored in `settings` table, auto-refreshed with 5-minute buffer before expiry. Check `actionstep.js:getAccessToken()` for token management.
 
 **Fee Calculation:** Time entries aggregated by fee earner, referrer gets configurable percentage (default 10%), remaining split proportionally among fee earners.
 

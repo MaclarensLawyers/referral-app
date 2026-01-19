@@ -109,11 +109,18 @@ function renderTable() {
  */
 async function loadMatters() {
     loadingIndicator.style.display = 'flex';
-    
+
     try {
-        const response = await fetch(`/api/get-matters?period=${currentPeriod}`);
+        const headers = await auth.getAuthHeaders();
+        const response = await fetch(`/api/get-matters?period=${currentPeriod}`, { headers });
+
+        if (response.status === 401) {
+            window.location.href = '/login.html';
+            return;
+        }
+
         const data = await response.json();
-        
+
         if (response.ok) {
             matters = data.matters;
             referralPercentage = data.referralPercentage;
@@ -138,21 +145,27 @@ async function fetchFeesForMatter(matterId) {
     const originalText = btn.textContent;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>';
-    
+
     try {
+        const headers = await auth.getAuthHeaders();
         const response = await fetch('/api/fetch-fees', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({ matter_id: matterId }),
         });
-        
+
         const data = await response.json();
-        
+
         if (response.status === 401) {
-            alert('Please connect to Actionstep first. Go to Settings to authenticate.');
+            // Check if it's user auth or Actionstep auth
+            if (data.error === 'Authentication required') {
+                window.location.href = '/login.html';
+            } else {
+                alert('Please connect to Actionstep first. Go to Settings to authenticate.');
+            }
             return;
         }
-        
+
         if (response.ok && data.results && data.results.length > 0) {
             // Update the matter in our local state
             const result = data.results[0];
@@ -179,26 +192,31 @@ async function fetchFeesForMatter(matterId) {
  */
 async function fetchAllFees() {
     if (matters.length === 0) return;
-    
+
     fetchAllBtn.disabled = true;
     fetchAllBtn.innerHTML = '<span class="spinner"></span> Fetching...';
-    
+
     try {
         const matterIds = matters.map(m => m.matter_id);
-        
+
+        const headers = await auth.getAuthHeaders();
         const response = await fetch('/api/fetch-fees', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({ matter_ids: matterIds }),
         });
-        
+
         const data = await response.json();
-        
+
         if (response.status === 401) {
-            alert('Please connect to Actionstep first. Go to Settings to authenticate.');
+            if (data.error === 'Authentication required') {
+                window.location.href = '/login.html';
+            } else {
+                alert('Please connect to Actionstep first. Go to Settings to authenticate.');
+            }
             return;
         }
-        
+
         if (response.ok) {
             // Update local state with results
             data.results.forEach(result => {
@@ -208,9 +226,9 @@ async function fetchAllFees() {
                     matters[matterIndex].total_fees = result.fee_data.total;
                 }
             });
-            
+
             renderTable();
-            
+
             if (data.errors && data.errors.length > 0) {
                 alert(`Fetched ${data.results.length} matters. ${data.errors.length} failed.`);
             }
