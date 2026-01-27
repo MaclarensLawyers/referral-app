@@ -15,8 +15,8 @@ exports.handler = async (event) => {
             await verifyAuth(event);
             // Get current settings
             const settings = await sql`
-                SELECT key, value FROM settings 
-                WHERE key IN ('referral_percentage')
+                SELECT key, value FROM settings
+                WHERE key IN ('referral_percentage', 'fetch_method', 'zapier_fetch_url')
             `;
             
             const settingsObj = {};
@@ -33,6 +33,8 @@ exports.handler = async (event) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     referral_percentage: parseFloat(settingsObj.referral_percentage || '10'),
+                    fetch_method: settingsObj.fetch_method || 'direct',
+                    zapier_fetch_url: settingsObj.zapier_fetch_url || '',
                     actionstep_connected: isConnected,
                 }),
             };
@@ -57,12 +59,51 @@ exports.handler = async (event) => {
                 await sql`
                     INSERT INTO settings (key, value, updated_at)
                     VALUES ('referral_percentage', ${percentage.toString()}, NOW())
-                    ON CONFLICT (key) DO UPDATE SET 
+                    ON CONFLICT (key) DO UPDATE SET
                         value = EXCLUDED.value,
                         updated_at = NOW()
                 `;
             }
-            
+
+            if (body.fetch_method !== undefined) {
+                const method = body.fetch_method;
+
+                if (method !== 'direct' && method !== 'zapier') {
+                    return {
+                        statusCode: 400,
+                        body: JSON.stringify({ error: 'Invalid fetch method. Must be "direct" or "zapier".' }),
+                    };
+                }
+
+                await sql`
+                    INSERT INTO settings (key, value, updated_at)
+                    VALUES ('fetch_method', ${method}, NOW())
+                    ON CONFLICT (key) DO UPDATE SET
+                        value = EXCLUDED.value,
+                        updated_at = NOW()
+                `;
+            }
+
+            if (body.zapier_fetch_url !== undefined) {
+                const url = body.zapier_fetch_url;
+
+                // Validate URL format if provided
+                if (url && !url.startsWith('https://')) {
+                    return {
+                        statusCode: 400,
+                        body: JSON.stringify({ error: 'Zapier URL must start with https://' }),
+                    };
+                }
+
+                await sql`
+                    INSERT INTO settings (key, value, updated_at)
+                    VALUES ('zapier_fetch_url', ${url}, NOW())
+                    ON CONFLICT (key) DO UPDATE SET
+                        value = EXCLUDED.value,
+                        updated_at = NOW()
+                `;
+            }
+
             return {
                 statusCode: 200,
                 headers: { 'Content-Type': 'application/json' },

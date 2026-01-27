@@ -94,6 +94,55 @@
             </form>
         </div>
 
+        <!-- Fetch Method -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Data Fetch Method</h2>
+                <p>Choose how the app fetches time entry data from Actionstep.</p>
+            </div>
+
+            <form id="fetch-method-form">
+                <div class="form-group">
+                    <label>Fetch Method</label>
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="radio" name="fetch_method" value="direct" id="fetch-method-direct" checked>
+                            <div>
+                                <strong>Direct API</strong>
+                                <p style="margin: 0.25rem 0 0 0; color: var(--color-text-secondary); font-size: 0.875rem;">
+                                    App calls Actionstep API directly (requires Actionstep connection above)
+                                </p>
+                            </div>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="radio" name="fetch_method" value="zapier" id="fetch-method-zapier">
+                            <div>
+                                <strong>Zapier Workflow</strong>
+                                <p style="margin: 0.25rem 0 0 0; color: var(--color-text-secondary); font-size: 0.875rem;">
+                                    App triggers Zapier, Zapier calls Actionstep and posts results back (slower but more reliable)
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group" id="zapier-url-group" style="display: none;">
+                    <label for="zapier-fetch-url">Zapier Webhook URL</label>
+                    <input
+                        type="url"
+                        id="zapier-fetch-url"
+                        name="zapier_fetch_url"
+                        placeholder="https://hooks.zapier.com/hooks/catch/..."
+                    >
+                    <p style="margin: 0.5rem 0 0 0; color: var(--color-text-secondary); font-size: 0.875rem;">
+                        The Zapier webhook URL that will receive fetch requests
+                    </p>
+                </div>
+
+                <button type="submit" class="btn btn-primary">Save</button>
+            </form>
+        </div>
+
         <!-- Webhook URL -->
         <div class="card">
             <div class="card-header">
@@ -200,6 +249,19 @@
                 // Update percentage input
                 document.getElementById('referral-percentage').value = data.referral_percentage;
 
+                // Update fetch method settings
+                const fetchMethod = data.fetch_method || 'direct';
+                const zapierUrl = data.zapier_fetch_url || '';
+
+                if (fetchMethod === 'zapier') {
+                    document.getElementById('fetch-method-zapier').checked = true;
+                    document.getElementById('zapier-url-group').style.display = 'block';
+                } else {
+                    document.getElementById('fetch-method-direct').checked = true;
+                    document.getElementById('zapier-url-group').style.display = 'none';
+                }
+                document.getElementById('zapier-fetch-url').value = zapierUrl;
+
                 // Update connection status
                 const statusEl = document.getElementById('connection-status');
                 const connectBtn = document.getElementById('connect-btn');
@@ -227,6 +289,18 @@
             }
         }
 
+        // Toggle Zapier URL visibility based on fetch method selection
+        document.querySelectorAll('input[name="fetch_method"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const zapierUrlGroup = document.getElementById('zapier-url-group');
+                if (e.target.value === 'zapier') {
+                    zapierUrlGroup.style.display = 'block';
+                } else {
+                    zapierUrlGroup.style.display = 'none';
+                }
+            });
+        });
+
         // Save percentage (admin only)
         document.getElementById('percentage-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -248,6 +322,46 @@
 
                 if (response.ok) {
                     alert('Settings saved successfully!');
+                } else {
+                    const data = await response.json();
+                    alert('Error saving settings: ' + data.error);
+                }
+            } catch (error) {
+                alert('Failed to save settings.');
+            }
+        });
+
+        // Save fetch method (admin only)
+        document.getElementById('fetch-method-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const fetchMethod = document.querySelector('input[name="fetch_method"]:checked').value;
+            const zapierUrl = document.getElementById('zapier-fetch-url').value;
+
+            // Validate Zapier URL if Zapier mode is selected
+            if (fetchMethod === 'zapier' && !zapierUrl) {
+                alert('Please enter a Zapier webhook URL');
+                return;
+            }
+
+            try {
+                const headers = await auth.getAuthHeaders();
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        fetch_method: fetchMethod,
+                        zapier_fetch_url: zapierUrl,
+                    }),
+                });
+
+                if (response.status === 401 || response.status === 403) {
+                    alert('You do not have permission to change settings.');
+                    return;
+                }
+
+                if (response.ok) {
+                    alert('Fetch method settings saved successfully!');
                 } else {
                     const data = await response.json();
                     alert('Error saving settings: ' + data.error);

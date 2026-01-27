@@ -1,6 +1,7 @@
 const { sql } = require('./lib/db');
 const { getTimeEntriesForMatter } = require('./lib/actionstep');
 const { verifyAuth, handleAuthError } = require('./lib/auth');
+const crypto = require('crypto');
 
 /**
  * Fetch fee data from Actionstep for specified matters
@@ -39,11 +40,18 @@ exports.handler = async (event) => {
             };
         }
         
-        // Get referral percentage
+        // Get referral percentage and fetch method settings
         const settings = await sql`
-            SELECT value FROM settings WHERE key = 'referral_percentage'
+            SELECT key, value FROM settings
+            WHERE key IN ('referral_percentage', 'fetch_method', 'zapier_fetch_url')
         `;
-        const referralPercentage = parseFloat(settings[0]?.value || '10');
+        const settingsMap = {};
+        settings.forEach(row => {
+            settingsMap[row.key] = row.value;
+        });
+        const referralPercentage = parseFloat(settingsMap.referral_percentage || '10');
+        const fetchMethod = settingsMap.fetch_method || 'direct';
+        const zapierFetchUrl = settingsMap.zapier_fetch_url || '';
         
         // Get referrer names for these matters
         const referrerData = await sql`
@@ -61,7 +69,75 @@ exports.handler = async (event) => {
         
         for (const matterId of matterIds) {
             try {
-                // Fetch time entries from Actionstep (includes owner/user data)
+                // Check if using Zapier mode
+                if (fetchMethod === 'zapier') {
+                    // Validate Zapier URL is configured
+                    if (!zapierFetchUrl) {
+                        errors.push({
+                            matter_id: matterId,
+                            error: 'Zapier fetch URL not configured in Settings',
+                        });
+                        continue;
+                    }
+
+                    // Generate correlation ID for tracking this request
+                    const correlationId = crypto.randomUUID();
+
+                    // Insert pending snapshot
+                    await sql`
+                        INSERT INTO fee_snapshots (matter_id, fetch_status, correlation_id, total_fees, fee_data)
+                        VALUES (${matterId}, 'pending', ${correlationId}, 0, '{}')
+                    `;
+
+                    // Prepare callback URL
+                    const callbackUrl = `${process.env.APP_URL}/.netlify/functions/zapier-fetch-callback`;
+
+                    // POST to Zapier webhook
+                    try {
+                        const zapierResponse = await fetch(zapierFetchUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                matter_id: matterId,
+                                correlation_id: correlationId,
+                                callback_url: callbackUrl,
+                            }),
+                        });
+
+                        if (!zapierResponse.ok) {
+                            throw new Error(`Zapier webhook returned ${zapierResponse.status}`);
+                        }
+
+                        results.push({
+                            matter_id: matterId,
+                            status: 'pending',
+                            correlation_id: correlationId,
+                        });
+
+                    } catch (zapierError) {
+                        console.error(`Error posting to Zapier for matter ${matterId}:`, zapierError);
+
+                        // Mark snapshot as failed
+                        await sql`
+                            UPDATE fee_snapshots
+                            SET fetch_status = 'failed',
+                                error_message = ${zapierError.message}
+                            WHERE matter_id = ${matterId}
+                              AND correlation_id = ${correlationId}
+                        `;
+
+                        errors.push({
+                            matter_id: matterId,
+                            error: `Failed to trigger Zapier webhook: ${zapierError.message}`,
+                        });
+                    }
+
+                    continue; // Skip to next matter
+                }
+
+                // Direct mode - fetch time entries from Actionstep (includes owner/user data)
                 const { timeentries, users, _linkedRaw } = await getTimeEntriesForMatter(matterId);
                 
                 // Debug logging

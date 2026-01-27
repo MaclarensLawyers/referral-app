@@ -1,0 +1,238 @@
+const { sql } = require('./lib/db');
+
+/**
+ * Zapier webhook callback endpoint
+ * Receives Actionstep data from Zapier, calculates fees, and stores snapshot
+ *
+ * POST body:
+ * {
+ *   "matter_id": "12345",
+ *   "correlation_id": "uuid",
+ *   "timeentries": [...],
+ *   "linked": { "users": [...] }
+ * }
+ */
+exports.handler = async (event) => {
+    if (event.httpMethod !== 'POST') {
+        return {
+            statusCode: 405,
+            body: JSON.stringify({ error: 'Method not allowed' }),
+        };
+    }
+
+    try {
+        const body = JSON.parse(event.body);
+
+        // Validate required fields
+        if (!body.matter_id || !body.correlation_id || !body.timeentries || !body.linked) {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({
+                    error: 'Missing required fields: matter_id, correlation_id, timeentries, linked',
+                }),
+            };
+        }
+
+        const { matter_id, correlation_id, timeentries, linked } = body;
+
+        // Find pending snapshot with matching matter_id and correlation_id
+        const snapshots = await sql`
+            SELECT id, matter_id, correlation_id, fetch_status
+            FROM fee_snapshots
+            WHERE matter_id = ${matter_id}
+              AND correlation_id = ${correlation_id}
+              AND fetch_status = 'pending'
+            ORDER BY fetched_at DESC
+            LIMIT 1
+        `;
+
+        if (snapshots.length === 0) {
+            return {
+                statusCode: 404,
+                body: JSON.stringify({
+                    error: 'No pending fetch found for this matter_id and correlation_id',
+                }),
+            };
+        }
+
+        const snapshot = snapshots[0];
+
+        // Update status to processing
+        await sql`
+            UPDATE fee_snapshots
+            SET fetch_status = 'processing'
+            WHERE id = ${snapshot.id}
+        `;
+
+        // Extract users from linked data
+        const users = {};
+        if (linked.users && Array.isArray(linked.users)) {
+            linked.users.forEach(user => {
+                users[user.id] = user;
+            });
+        }
+
+        console.log(`Zapier callback for matter ${matter_id}: Found ${timeentries.length} time entries`);
+        console.log(`Zapier callback for matter ${matter_id}: Users map has ${Object.keys(users).length} entries`);
+
+        // Get referral percentage and referrer name
+        const settings = await sql`
+            SELECT value FROM settings WHERE key = 'referral_percentage'
+        `;
+        const referralPercentage = parseFloat(settings[0]?.value || '10');
+
+        const referrerData = await sql`
+            SELECT referrer_name
+            FROM referred_matters
+            WHERE matter_id = ${matter_id}
+        `;
+        const referrerName = referrerData[0]?.referrer_name || 'Unknown';
+
+        // Calculate totals by fee earner (same logic as fetch-fees.js)
+        const feeEarnerTotals = {};
+        let totalFees = 0;
+
+        timeentries.forEach(entry => {
+            // Use billableAmount directly from the API
+            const amount = parseFloat(entry.billableAmount) || 0;
+
+            // Get owner ID from links, then look up the name
+            const ownerId = entry.links?.owner;
+            const ownerUser = ownerId ? users[ownerId] : null;
+            // User object typically has 'name' or 'firstName'/'lastName'
+            const ownerName = ownerUser
+                ? (ownerUser.name || `${ownerUser.firstName || ''} ${ownerUser.lastName || ''}`.trim() || `User ${ownerId}`)
+                : 'Unknown';
+
+            if (!feeEarnerTotals[ownerName]) {
+                feeEarnerTotals[ownerName] = 0;
+            }
+            feeEarnerTotals[ownerName] += amount;
+            totalFees += amount;
+        });
+
+        // Calculate referral amount
+        const referralAmount = totalFees * (referralPercentage / 100);
+        const adjustedTotal = totalFees - referralAmount;
+
+        // Build fee earner breakdown (adjusted proportionally)
+        const feeEarnersData = Object.entries(feeEarnerTotals).map(([name, amount]) => {
+            const originalPercentage = totalFees > 0 ? (amount / totalFees) * 100 : 0;
+            const adjustedAmount = totalFees > 0 ? (amount / totalFees) * adjustedTotal : 0;
+            // Calculate adjusted percentage (percentage of original total, so all percentages add to 100%)
+            const adjustedPercentage = totalFees > 0 ? (adjustedAmount / totalFees) * 100 : 0;
+
+            return {
+                name,
+                originalAmount: Math.round(amount * 100) / 100,
+                adjustedAmount: Math.round(adjustedAmount * 100) / 100,
+                originalPercentage: Math.round(originalPercentage * 100) / 100,
+                adjustedPercentageExact: adjustedPercentage,
+            };
+        });
+
+        // Round percentages so they sum to 100% using largest remainder method
+        const allItems = [
+            ...feeEarnersData.map((fe, idx) => ({
+                type: 'feeEarner',
+                index: idx,
+                percentage: fe.adjustedPercentageExact
+            })),
+            { type: 'referrer', percentage: referralPercentage }
+        ];
+
+        // Calculate floor values and remainders
+        allItems.forEach(item => {
+            item.floor = Math.floor(item.percentage);
+            item.remainder = item.percentage - item.floor;
+        });
+
+        // Calculate how many 1% increments we need to distribute
+        const sumFloor = allItems.reduce((sum, item) => sum + item.floor, 0);
+        const diff = 100 - sumFloor;
+
+        // Sort by remainder descending and distribute the difference
+        allItems.sort((a, b) => b.remainder - a.remainder);
+        for (let i = 0; i < diff && i < allItems.length; i++) {
+            allItems[i].rounded = allItems[i].floor + 1;
+        }
+        for (let i = diff; i < allItems.length; i++) {
+            allItems[i].rounded = allItems[i].floor;
+        }
+
+        // Apply rounded percentages back to fee earners
+        const feeEarners = feeEarnersData.map((fe, idx) => {
+            const item = allItems.find(item => item.type === 'feeEarner' && item.index === idx);
+            return {
+                ...fe,
+                adjustedPercentage: item.rounded,
+            };
+        });
+
+        // Get rounded referrer percentage
+        const referrerItem = allItems.find(item => item.type === 'referrer');
+        const referrerRoundedPercentage = referrerItem.rounded;
+
+        const feeData = {
+            fee_earners: feeEarners,
+            referrer: {
+                name: referrerName,
+                amount: Math.round(referralAmount * 100) / 100,
+                percentage: referrerRoundedPercentage,
+            },
+            total: Math.round(totalFees * 100) / 100,
+            adjusted_total: Math.round(adjustedTotal * 100) / 100,
+            time_entry_count: timeentries.length,
+        };
+
+        // Update snapshot with completed status and fee data
+        await sql`
+            UPDATE fee_snapshots
+            SET fetch_status = 'completed',
+                total_fees = ${totalFees},
+                fee_data = ${JSON.stringify(feeData)},
+                error_message = NULL
+            WHERE id = ${snapshot.id}
+        `;
+
+        console.log(`Zapier callback completed for matter ${matter_id}`);
+
+        return {
+            statusCode: 200,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                success: true,
+                matter_id,
+                fee_data: feeData,
+            }),
+        };
+
+    } catch (error) {
+        console.error('Zapier callback error:', error);
+
+        // Try to update snapshot status to failed if we have the correlation_id
+        try {
+            const body = JSON.parse(event.body);
+            if (body.matter_id && body.correlation_id) {
+                await sql`
+                    UPDATE fee_snapshots
+                    SET fetch_status = 'failed',
+                        error_message = ${error.message}
+                    WHERE matter_id = ${body.matter_id}
+                      AND correlation_id = ${body.correlation_id}
+                      AND fetch_status IN ('pending', 'processing')
+                `;
+            }
+        } catch (updateError) {
+            console.error('Failed to update snapshot status:', updateError);
+        }
+
+        return {
+            statusCode: 500,
+            body: JSON.stringify({
+                error: 'Internal server error',
+                details: error.message,
+            }),
+        };
+    }
+};

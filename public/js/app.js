@@ -6,6 +6,8 @@
 let currentPeriod = 'current_month';
 let matters = [];
 let referralPercentage = 10;
+let fetchMethod = 'direct'; // 'direct' or 'zapier'
+const pollingIntervals = new Map(); // Track active polls per matter
 
 // DOM Elements
 const mattersTable = document.getElementById('matters-table');
@@ -36,6 +38,94 @@ function formatDate(dateString) {
         month: 'short',
         year: 'numeric',
     });
+}
+
+/**
+ * Poll fetch status for a matter (used in Zapier mode)
+ */
+async function pollFetchStatus(matterId, button) {
+    const maxAttempts = 30; // 30 attempts * 2 seconds = 60 seconds
+    let attempts = 0;
+
+    const pollInterval = setInterval(async () => {
+        attempts++;
+
+        try {
+            const headers = await auth.getAuthHeaders();
+            const response = await fetch(`/api/fetch-status?matter_ids=${matterId}`, { headers });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch status');
+            }
+
+            const data = await response.json();
+            const status = data.results?.[matterId];
+
+            if (!status) {
+                console.warn('No status found for matter:', matterId);
+                return;
+            }
+
+            if (status.fetch_status === 'completed') {
+                // Stop polling
+                clearInterval(pollInterval);
+                pollingIntervals.delete(matterId);
+
+                // Update matter data
+                const matterIndex = matters.findIndex(m => m.matter_id === matterId);
+                if (matterIndex !== -1) {
+                    matters[matterIndex].fee_data = status.fee_data;
+                    matters[matterIndex].total_fees = status.total_fees;
+                }
+
+                // Re-render table
+                renderTable();
+
+                console.log('Fetch completed for matter:', matterId);
+            } else if (status.fetch_status === 'failed') {
+                // Stop polling
+                clearInterval(pollInterval);
+                pollingIntervals.delete(matterId);
+
+                // Reset button
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = 'Fetch';
+                }
+
+                // Show error
+                alert(`Failed to fetch fees: ${status.error_message || 'Unknown error'}`);
+            } else if (attempts >= maxAttempts) {
+                // Timeout
+                clearInterval(pollInterval);
+                pollingIntervals.delete(matterId);
+
+                // Reset button to retry
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = 'Retry';
+                }
+
+                alert('Fetch timed out. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error polling status:', error);
+
+            // Stop polling on error
+            if (attempts >= 3) {
+                clearInterval(pollInterval);
+                pollingIntervals.delete(matterId);
+
+                if (button) {
+                    button.disabled = false;
+                    button.textContent = 'Fetch';
+                }
+            }
+        }
+    }, 2000); // Poll every 2 seconds
+
+    // Store interval reference
+    pollingIntervals.set(matterId, pollInterval);
 }
 
 /**
@@ -90,7 +180,7 @@ function renderTable() {
     fetchAllBtn.disabled = false;
     
     tableBody.innerHTML = matters.map(matter => `
-        <tr>
+        <tr data-matter-id="${matter.matter_id}">
             <td class="cell-mono">${matter.matter_id}</td>
             <td>${matter.matter_name || '<span class="cell-muted">—</span>'}</td>
             <td>${matter.referrer_name}</td>
@@ -114,22 +204,32 @@ async function loadMatters() {
 
     try {
         const headers = await auth.getAuthHeaders();
-        const response = await fetch(`/api/get-matters?period=${currentPeriod}`, { headers });
 
-        if (response.status === 401) {
+        // Fetch both matters and settings in parallel
+        const [mattersResponse, settingsResponse] = await Promise.all([
+            fetch(`/api/get-matters?period=${currentPeriod}`, { headers }),
+            fetch('/api/settings', { headers })
+        ]);
+
+        if (mattersResponse.status === 401) {
             window.location.href = '/login.html';
             return;
         }
 
-        const data = await response.json();
+        const mattersData = await mattersResponse.json();
+        const settingsData = await settingsResponse.json();
 
-        if (response.ok) {
-            matters = data.matters;
-            referralPercentage = data.referralPercentage;
+        if (mattersResponse.ok) {
+            matters = mattersData.matters;
+            referralPercentage = mattersData.referralPercentage;
+
+            // Store fetch method from settings
+            fetchMethod = settingsData.fetch_method || 'direct';
+
             renderTable();
         } else {
-            console.error('Error loading matters:', data.error);
-            alert('Failed to load matters: ' + data.error);
+            console.error('Error loading matters:', mattersData.error);
+            alert('Failed to load matters: ' + mattersData.error);
         }
     } catch (error) {
         console.error('Error loading matters:', error);
@@ -169,8 +269,18 @@ async function fetchFeesForMatter(matterId) {
         }
 
         if (response.ok && data.results && data.results.length > 0) {
-            // Update the matter in our local state
             const result = data.results[0];
+
+            // Check if this is a pending Zapier fetch
+            if (result.status === 'pending') {
+                // Keep button disabled and show fetching state
+                btn.textContent = 'Fetching...';
+                // Start polling for status
+                pollFetchStatus(matterId, btn);
+                return; // Don't reset button yet
+            }
+
+            // Direct mode - update immediately
             const matterIndex = matters.findIndex(m => m.matter_id === matterId);
             if (matterIndex !== -1) {
                 matters[matterIndex].fee_data = result.fee_data;
@@ -184,8 +294,11 @@ async function fetchFeesForMatter(matterId) {
         console.error('Error fetching fees:', error);
         alert('Failed to fetch fees. Please try again.');
     } finally {
-        btn.disabled = false;
-        btn.textContent = originalText;
+        // Only reset button if not in pending state (for Zapier mode)
+        if (btn.textContent !== 'Fetching...') {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
     }
 }
 
@@ -265,12 +378,22 @@ document.addEventListener('DOMContentLoaded', () => {
     periodToggle.forEach(btn => {
         btn.addEventListener('click', () => handlePeriodChange(btn.dataset.period));
     });
-    
+
     // Set up fetch all button
     fetchAllBtn.addEventListener('click', fetchAllFees);
-    
+
     // Load initial data
     loadMatters();
+});
+
+/**
+ * Cleanup polling intervals on page unload
+ */
+window.addEventListener('beforeunload', () => {
+    pollingIntervals.forEach((interval, matterId) => {
+        clearInterval(interval);
+    });
+    pollingIntervals.clear();
 });
 
 // Export for inline onclick handlers
