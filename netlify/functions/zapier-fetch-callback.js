@@ -8,8 +8,7 @@ const { sql } = require('./lib/db');
  * {
  *   "matter_id": "12345",
  *   "correlation_id": "uuid",
- *   "timeentries": [...],
- *   "linked": { "users": [...] }
+ *   "actionstep_response": "{\"timeentries\":[...],\"linked\":{\"users\":[...]}}"
  * }
  */
 exports.handler = async (event) => {
@@ -24,16 +23,46 @@ exports.handler = async (event) => {
         const body = JSON.parse(event.body);
 
         // Validate required fields
-        if (!body.matter_id || !body.correlation_id || !body.timeentries || !body.linked) {
+        if (!body.matter_id || !body.correlation_id || !body.actionstep_response) {
             return {
                 statusCode: 400,
                 body: JSON.stringify({
-                    error: 'Missing required fields: matter_id, correlation_id, timeentries, linked',
+                    error: 'Missing required fields: matter_id, correlation_id, actionstep_response',
                 }),
             };
         }
 
-        const { matter_id, correlation_id, timeentries, linked } = body;
+        const { matter_id, correlation_id } = body;
+
+        // Parse the raw Actionstep response
+        let actionstepData;
+        try {
+            // If actionstep_response is a string, parse it; if it's already an object, use it
+            actionstepData = typeof body.actionstep_response === 'string'
+                ? JSON.parse(body.actionstep_response)
+                : body.actionstep_response;
+        } catch (parseError) {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({
+                    error: 'Invalid actionstep_response: must be valid JSON',
+                    details: parseError.message,
+                }),
+            };
+        }
+
+        // Extract timeentries and linked from the Actionstep response
+        const timeentries = actionstepData.timeentries || [];
+        const linked = actionstepData.linked || {};
+
+        if (!Array.isArray(timeentries)) {
+            return {
+                statusCode: 400,
+                body: JSON.stringify({
+                    error: 'Invalid actionstep_response: timeentries must be an array',
+                }),
+            };
+        }
 
         // Find pending snapshot with matching matter_id and correlation_id
         const snapshots = await sql`
