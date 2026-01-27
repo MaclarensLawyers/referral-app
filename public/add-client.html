@@ -15,15 +15,9 @@
     </script>
     <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
     <style>
-        .iframe-wrapper {
-            min-height: 450px;
-            background: #fafafa;
-        }
-        .iframe-wrapper iframe {
-            width: 100%;
-            height: 550px;
-            border: none;
-            display: block;
+        .form-row {
+            display: grid;
+            gap: 1rem;
         }
     </style>
 </head>
@@ -48,19 +42,66 @@
             <p>Register a new client as having been referred by a staff member. When matters are created for this client, the referrer will be tracked automatically.</p>
         </div>
 
+        <!-- Alert messages -->
+        <div id="alert-success" class="alert alert-success" style="display: none;">
+            Client submitted successfully!
+        </div>
+        <div id="alert-error" class="alert alert-error" style="display: none;">
+            <span id="error-message"></span>
+        </div>
+
         <div class="card">
             <div class="card-header">
                 <h2>Client Registration Form</h2>
                 <p>This form saves to Zapier Tables, which is checked when new matters are created.</p>
             </div>
 
-            <div class="iframe-wrapper">
-                <iframe
-                    src="https://interfaces.zapier.com/embed/page/cmkanlm4w005pl6m8vsy33lj4?noBackground=false"
-                    id="zapier-form"
-                    title="Add Referred Client Form"
-                ></iframe>
-            </div>
+            <form id="client-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="client-participant-id">Client Participant ID *</label>
+                        <input
+                            type="text"
+                            id="client-participant-id"
+                            name="client_participant_id"
+                            placeholder="e.g., 12345"
+                            required
+                        >
+                        <p style="margin: 0.5rem 0 0 0; color: var(--color-text-secondary); font-size: 0.875rem;">
+                            Found in the Actionstep contact URL or details panel
+                        </p>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="client-name">Client Name *</label>
+                        <input
+                            type="text"
+                            id="client-name"
+                            name="client_name"
+                            placeholder="e.g., John Smith"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="referrer-name">Referrer Name *</label>
+                        <input
+                            type="text"
+                            id="referrer-name"
+                            name="referrer_name"
+                            placeholder="e.g., Jane Doe"
+                            required
+                        >
+                        <p style="margin: 0.5rem 0 0 0; color: var(--color-text-secondary); font-size: 0.875rem;">
+                            The staff member who referred this client
+                        </p>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="submit-btn">
+                    Submit Client
+                </button>
+            </form>
         </div>
 
         <div class="card">
@@ -77,6 +118,66 @@
 
     <script src="/js/auth.js"></script>
     <script>
+        // Handle form submission
+        document.getElementById('client-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submit-btn');
+            const successAlert = document.getElementById('alert-success');
+            const errorAlert = document.getElementById('alert-error');
+            const errorMessage = document.getElementById('error-message');
+
+            // Hide previous alerts
+            successAlert.style.display = 'none';
+            errorAlert.style.display = 'none';
+
+            // Disable button and show loading state
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+
+            try {
+                const formData = {
+                    client_participant_id: document.getElementById('client-participant-id').value.trim(),
+                    client_name: document.getElementById('client-name').value.trim(),
+                    referrer_name: document.getElementById('referrer-name').value.trim(),
+                };
+
+                const headers = await auth.getAuthHeaders();
+                const response = await fetch('/api/add-client', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(formData),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    // Show success message
+                    successAlert.style.display = 'block';
+
+                    // Reset form
+                    document.getElementById('client-form').reset();
+
+                    // Scroll to top to show success message
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                    // Show error message
+                    errorMessage.textContent = data.error || 'Failed to submit client';
+                    errorAlert.style.display = 'block';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            } catch (error) {
+                console.error('Submission error:', error);
+                errorMessage.textContent = 'Failed to submit client. Please try again.';
+                errorAlert.style.display = 'block';
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            } finally {
+                // Re-enable button
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Client';
+            }
+        });
+
         // Require authentication
         auth.ready.then(() => {
             if (!auth.getUser()) {

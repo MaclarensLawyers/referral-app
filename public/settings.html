@@ -143,6 +143,30 @@
             </form>
         </div>
 
+        <!-- Zapier Add Client URL -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Add Client Zapier Webhook URL</h2>
+                <p>Configure the Zapier webhook URL to receive new client submissions from the Add Client form.</p>
+            </div>
+
+            <form id="add-client-url-form">
+                <div class="form-group">
+                    <label for="zapier-add-client-url">Zapier Webhook URL</label>
+                    <input
+                        type="url"
+                        id="zapier-add-client-url"
+                        name="zapier_add_client_url"
+                        placeholder="https://hooks.zapier.com/hooks/catch/..."
+                    >
+                    <p style="margin: 0.5rem 0 0 0; color: var(--color-text-secondary); font-size: 0.875rem;">
+                        The Zapier webhook URL that will receive new client submissions
+                    </p>
+                </div>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </form>
+        </div>
+
         <!-- Webhook URL -->
         <div class="card">
             <div class="card-header">
@@ -262,6 +286,9 @@
                 }
                 document.getElementById('zapier-fetch-url').value = zapierUrl;
 
+                // Update add client URL
+                document.getElementById('zapier-add-client-url').value = data.zapier_add_client_url || '';
+
                 // Update connection status
                 const statusEl = document.getElementById('connection-status');
                 const connectBtn = document.getElementById('connect-btn');
@@ -362,6 +389,38 @@
 
                 if (response.ok) {
                     alert('Fetch method settings saved successfully!');
+                } else {
+                    const data = await response.json();
+                    alert('Error saving settings: ' + data.error);
+                }
+            } catch (error) {
+                alert('Failed to save settings.');
+            }
+        });
+
+        // Save add client URL (admin only)
+        document.getElementById('add-client-url-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const url = document.getElementById('zapier-add-client-url').value;
+
+            try {
+                const headers = await auth.getAuthHeaders();
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({
+                        zapier_add_client_url: url,
+                    }),
+                });
+
+                if (response.status === 401 || response.status === 403) {
+                    alert('You do not have permission to change settings.');
+                    return;
+                }
+
+                if (response.ok) {
+                    alert('Add Client webhook URL saved successfully!');
                 } else {
                     const data = await response.json();
                     alert('Error saving settings: ' + data.error);

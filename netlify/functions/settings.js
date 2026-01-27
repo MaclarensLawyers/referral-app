@@ -16,7 +16,7 @@ exports.handler = async (event) => {
             // Get current settings
             const settings = await sql`
                 SELECT key, value FROM settings
-                WHERE key IN ('referral_percentage', 'fetch_method', 'zapier_fetch_url')
+                WHERE key IN ('referral_percentage', 'fetch_method', 'zapier_fetch_url', 'zapier_add_client_url')
             `;
             
             const settingsObj = {};
@@ -35,6 +35,7 @@ exports.handler = async (event) => {
                     referral_percentage: parseFloat(settingsObj.referral_percentage || '10'),
                     fetch_method: settingsObj.fetch_method || 'direct',
                     zapier_fetch_url: settingsObj.zapier_fetch_url || '',
+                    zapier_add_client_url: settingsObj.zapier_add_client_url || '',
                     actionstep_connected: isConnected,
                 }),
             };
@@ -98,6 +99,26 @@ exports.handler = async (event) => {
                 await sql`
                     INSERT INTO settings (key, value, updated_at)
                     VALUES ('zapier_fetch_url', ${url}, NOW())
+                    ON CONFLICT (key) DO UPDATE SET
+                        value = EXCLUDED.value,
+                        updated_at = NOW()
+                `;
+            }
+
+            if (body.zapier_add_client_url !== undefined) {
+                const url = body.zapier_add_client_url;
+
+                // Validate URL format if provided
+                if (url && !url.startsWith('https://')) {
+                    return {
+                        statusCode: 400,
+                        body: JSON.stringify({ error: 'Zapier URL must start with https://' }),
+                    };
+                }
+
+                await sql`
+                    INSERT INTO settings (key, value, updated_at)
+                    VALUES ('zapier_add_client_url', ${url}, NOW())
                     ON CONFLICT (key) DO UPDATE SET
                         value = EXCLUDED.value,
                         updated_at = NOW()
