@@ -8,8 +8,11 @@ const { sql } = require('./lib/db');
  * {
  *   "matter_id": "12345",
  *   "correlation_id": "uuid",
- *   "actionstep_response": "{\"timeentries\":[...],\"linked\":{\"users\":[...]}}"
+ *   "actionstep_response": "{\"timeentries\":[...],\"linked\":{\"participants\":[...]}}"
  * }
+ *
+ * Only time entries from lawyers (based on occupation) are counted.
+ * Support staff time entries are excluded as they are treated as disbursements.
  */
 exports.handler = async (event) => {
     if (event.httpMethod !== 'POST') {
@@ -93,16 +96,27 @@ exports.handler = async (event) => {
             WHERE id = ${snapshot.id}
         `;
 
-        // Extract users from linked data
-        const users = {};
-        if (linked.users && Array.isArray(linked.users)) {
-            linked.users.forEach(user => {
-                users[user.id] = user;
+        // Extract participants from linked data
+        const participants = {};
+        if (linked.participants && Array.isArray(linked.participants)) {
+            linked.participants.forEach(participant => {
+                participants[participant.id] = participant;
             });
         }
 
         console.log(`Zapier callback for matter ${matter_id}: Found ${timeentries.length} time entries`);
-        console.log(`Zapier callback for matter ${matter_id}: Users map has ${Object.keys(users).length} entries`);
+        console.log(`Zapier callback for matter ${matter_id}: Participants map has ${Object.keys(participants).length} entries`);
+
+        // Helper function to check if participant is a lawyer
+        const isLawyer = (participant) => {
+            if (!participant || !participant.occupation) return false;
+            const occupation = participant.occupation.toUpperCase();
+            return occupation.includes('MANAGING PARTNER') ||
+                   occupation.includes('PARTNER') ||
+                   occupation.includes('SOLICITOR') ||
+                   occupation.includes('ASSOCIATE') ||
+                   occupation.includes('LAWYER');
+        };
 
         // Get referral percentage and referrer name
         const settings = await sql`
@@ -117,27 +131,34 @@ exports.handler = async (event) => {
         `;
         const referrerName = referrerData[0]?.referrer_name || 'Unknown';
 
-        // Calculate totals by fee earner (same logic as fetch-fees.js)
+        // Calculate totals by fee earner (only lawyers)
         const feeEarnerTotals = {};
         let totalFees = 0;
+        let lawyerTimeEntryCount = 0;
 
         timeentries.forEach(entry => {
             // Use billableAmount directly from the API
             const amount = parseFloat(entry.billableAmount) || 0;
 
-            // Get owner ID from links, then look up the name
+            // Get owner ID from links, then look up the participant
             const ownerId = entry.links?.owner;
-            const ownerUser = ownerId ? users[ownerId] : null;
-            // User object typically has 'name' or 'firstName'/'lastName'
-            const ownerName = ownerUser
-                ? (ownerUser.name || `${ownerUser.firstName || ''} ${ownerUser.lastName || ''}`.trim() || `User ${ownerId}`)
-                : 'Unknown';
+            const owner = ownerId ? participants[ownerId] : null;
+
+            // Skip non-lawyers (support staff time entries are excluded)
+            if (!owner || !isLawyer(owner)) {
+                console.log(`Skipping time entry from non-lawyer: ${owner?.firstName} ${owner?.lastName} (${owner?.occupation})`);
+                return;
+            }
+
+            // Build name from firstName and lastName
+            const ownerName = `${owner.firstName || ''} ${owner.lastName || ''}`.trim() || `Participant ${ownerId}`;
 
             if (!feeEarnerTotals[ownerName]) {
                 feeEarnerTotals[ownerName] = 0;
             }
             feeEarnerTotals[ownerName] += amount;
             totalFees += amount;
+            lawyerTimeEntryCount++;
         });
 
         // Calculate referral amount
@@ -211,7 +232,7 @@ exports.handler = async (event) => {
             },
             total: Math.round(totalFees * 100) / 100,
             adjusted_total: Math.round(adjustedTotal * 100) / 100,
-            time_entry_count: timeentries.length,
+            time_entry_count: lawyerTimeEntryCount,
         };
 
         // Update snapshot with completed status and fee data
