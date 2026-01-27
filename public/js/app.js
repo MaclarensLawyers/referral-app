@@ -49,10 +49,12 @@ function renderFeeBreakdown(feeData) {
     // Fee earners
     if (feeData.fee_earners && feeData.fee_earners.length > 0) {
         feeData.fee_earners.forEach(earner => {
+            // Use adjustedPercentage if available (new format), fallback to percentage (old format)
+            const percentage = earner.adjustedPercentage !== undefined ? earner.adjustedPercentage : earner.percentage;
             html += `
                 <div class="fee-earner">
                     <span>${earner.name}</span>
-                    <span>${formatCurrency(earner.adjustedAmount)} (${earner.percentage}%)</span>
+                    <span>${formatCurrency(earner.adjustedAmount)} (${percentage.toFixed(2)}%)</span>
                 </div>
             `;
         });

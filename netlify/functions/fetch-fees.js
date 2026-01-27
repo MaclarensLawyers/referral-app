@@ -105,12 +105,15 @@ exports.handler = async (event) => {
                 const feeEarners = Object.entries(feeEarnerTotals).map(([name, amount]) => {
                     const originalPercentage = totalFees > 0 ? (amount / totalFees) * 100 : 0;
                     const adjustedAmount = totalFees > 0 ? (amount / totalFees) * adjustedTotal : 0;
-                    
+                    // Calculate adjusted percentage (percentage of adjusted total, not original total)
+                    const adjustedPercentage = adjustedTotal > 0 ? (adjustedAmount / adjustedTotal) * 100 : 0;
+
                     return {
                         name,
                         originalAmount: Math.round(amount * 100) / 100,
                         adjustedAmount: Math.round(adjustedAmount * 100) / 100,
-                        percentage: Math.round(originalPercentage * 100) / 100,
+                        originalPercentage: Math.round(originalPercentage * 100) / 100,
+                        adjustedPercentage: Math.round(adjustedPercentage * 100) / 100,
                     };
                 });
                 
