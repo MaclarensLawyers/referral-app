@@ -54,7 +54,7 @@ function renderFeeBreakdown(feeData) {
             html += `
                 <div class="fee-earner">
                     <span>${earner.name}</span>
-                    <span>${formatCurrency(earner.adjustedAmount)} (${percentage.toFixed(2)}%)</span>
+                    <span>${formatCurrency(earner.adjustedAmount)} (${Math.round(percentage)}%)</span>
                 </div>
             `;
         });
@@ -65,7 +65,7 @@ function renderFeeBreakdown(feeData) {
         html += `
             <div class="fee-referrer">
                 <span>${feeData.referrer.name} (Referrer)</span>
-                <span>${formatCurrency(feeData.referrer.amount)} (${feeData.referrer.percentage}%)</span>
+                <span>${formatCurrency(feeData.referrer.amount)} (${Math.round(feeData.referrer.percentage)}%)</span>
             </div>
         `;
     }

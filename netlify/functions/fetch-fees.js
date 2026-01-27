@@ -100,9 +100,9 @@ exports.handler = async (event) => {
                 // Calculate referral amount
                 const referralAmount = totalFees * (referralPercentage / 100);
                 const adjustedTotal = totalFees - referralAmount;
-                
+
                 // Build fee earner breakdown (adjusted proportionally)
-                const feeEarners = Object.entries(feeEarnerTotals).map(([name, amount]) => {
+                const feeEarnersData = Object.entries(feeEarnerTotals).map(([name, amount]) => {
                     const originalPercentage = totalFees > 0 ? (amount / totalFees) * 100 : 0;
                     const adjustedAmount = totalFees > 0 ? (amount / totalFees) * adjustedTotal : 0;
                     // Calculate adjusted percentage (percentage of original total, so all percentages add to 100%)
@@ -113,16 +113,58 @@ exports.handler = async (event) => {
                         originalAmount: Math.round(amount * 100) / 100,
                         adjustedAmount: Math.round(adjustedAmount * 100) / 100,
                         originalPercentage: Math.round(originalPercentage * 100) / 100,
-                        adjustedPercentage: Math.round(adjustedPercentage * 100) / 100,
+                        adjustedPercentageExact: adjustedPercentage,
                     };
                 });
+
+                // Round percentages so they sum to 100% using largest remainder method
+                const allItems = [
+                    ...feeEarnersData.map((fe, idx) => ({
+                        type: 'feeEarner',
+                        index: idx,
+                        percentage: fe.adjustedPercentageExact
+                    })),
+                    { type: 'referrer', percentage: referralPercentage }
+                ];
+
+                // Calculate floor values and remainders
+                allItems.forEach(item => {
+                    item.floor = Math.floor(item.percentage);
+                    item.remainder = item.percentage - item.floor;
+                });
+
+                // Calculate how many 1% increments we need to distribute
+                const sumFloor = allItems.reduce((sum, item) => sum + item.floor, 0);
+                const diff = 100 - sumFloor;
+
+                // Sort by remainder descending and distribute the difference
+                allItems.sort((a, b) => b.remainder - a.remainder);
+                for (let i = 0; i < diff && i < allItems.length; i++) {
+                    allItems[i].rounded = allItems[i].floor + 1;
+                }
+                for (let i = diff; i < allItems.length; i++) {
+                    allItems[i].rounded = allItems[i].floor;
+                }
+
+                // Apply rounded percentages back to fee earners
+                const feeEarners = feeEarnersData.map((fe, idx) => {
+                    const item = allItems.find(item => item.type === 'feeEarner' && item.index === idx);
+                    return {
+                        ...fe,
+                        adjustedPercentage: item.rounded,
+                    };
+                });
+
+                // Get rounded referrer percentage
+                const referrerItem = allItems.find(item => item.type === 'referrer');
+                const referrerRoundedPercentage = referrerItem.rounded;
                 
                 const feeData = {
                     fee_earners: feeEarners,
                     referrer: {
                         name: referrerMap[matterId] || 'Unknown',
                         amount: Math.round(referralAmount * 100) / 100,
-                        percentage: referralPercentage,
+                        percentage: referrerRoundedPercentage,
                     },
                     total: Math.round(totalFees * 100) / 100,
                     adjusted_total: Math.round(adjustedTotal * 100) / 100,
