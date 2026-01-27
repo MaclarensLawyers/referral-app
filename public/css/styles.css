@@ -11,8 +11,8 @@
     --color-border: #e2e0db;
     --color-text: #1a1a1a;
     --color-text-muted: #6b6966;
-    --color-accent: #2d5a27;
-    --color-accent-light: #e8f0e7;
+    --color-accent: #2563eb;
+    --color-accent-light: #dbeafe;
     --color-warning: #b54708;
     --color-warning-light: #fef3e6;
     --color-error: #991b1b;
@@ -171,8 +171,8 @@ nav a.active {
 }
 
 .btn-primary:hover {
-    background: #234a1f;
-    border-color: #234a1f;
+    background: #1e40af;
+    border-color: #1e40af;
 }
 
 .btn-sm {
