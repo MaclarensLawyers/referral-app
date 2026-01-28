@@ -94,7 +94,7 @@ async function pollFetchStatus(matterId, button) {
                 }
 
                 // Show error
-                alert(`Failed to fetch fees: ${status.error_message || 'Unknown error'}`);
+                toast.error(`Failed to fetch fees: ${status.error_message || 'Unknown error'}`);
             } else if (attempts >= maxAttempts) {
                 // Timeout
                 clearInterval(pollInterval);
@@ -106,7 +106,7 @@ async function pollFetchStatus(matterId, button) {
                     button.textContent = 'Retry';
                 }
 
-                alert('Fetch timed out. Please try again.');
+                toast.error('Fetch timed out. Please try again.');
             }
         } catch (error) {
             console.error('Error polling status:', error);
@@ -229,11 +229,11 @@ async function loadMatters() {
             renderTable();
         } else {
             console.error('Error loading matters:', mattersData.error);
-            alert('Failed to load matters: ' + mattersData.error);
+            toast.error('Failed to load matters: ' + mattersData.error);
         }
     } catch (error) {
         console.error('Error loading matters:', error);
-        alert('Failed to load matters. Please check your connection.');
+        toast.error('Failed to load matters. Please check your connection.');
     } finally {
         loadingIndicator.style.display = 'none';
     }
@@ -263,7 +263,7 @@ async function fetchFeesForMatter(matterId) {
             if (data.error === 'Authentication required') {
                 window.location.href = '/login.html';
             } else {
-                alert('Please connect to Actionstep first. Go to Settings to authenticate.');
+                toast.error('Please connect to Actionstep first. Go to Settings to authenticate.');
             }
             return;
         }
@@ -288,11 +288,11 @@ async function fetchFeesForMatter(matterId) {
             }
             renderTable();
         } else if (data.errors && data.errors.length > 0) {
-            alert('Error fetching fees: ' + data.errors[0].error);
+            toast.error('Error fetching fees: ' + data.errors[0].error);
         }
     } catch (error) {
         console.error('Error fetching fees:', error);
-        alert('Failed to fetch fees. Please try again.');
+        toast.error('Failed to fetch fees. Please try again.');
     } finally {
         // Only reset button if not in pending state (for Zapier mode)
         if (btn.textContent !== 'Fetching...') {
@@ -327,7 +327,7 @@ async function fetchAllFees() {
             if (data.error === 'Authentication required') {
                 window.location.href = '/login.html';
             } else {
-                alert('Please connect to Actionstep first. Go to Settings to authenticate.');
+                toast.error('Please connect to Actionstep first. Go to Settings to authenticate.');
             }
             return;
         }
@@ -345,12 +345,14 @@ async function fetchAllFees() {
             renderTable();
 
             if (data.errors && data.errors.length > 0) {
-                alert(`Fetched ${data.results.length} matters. ${data.errors.length} failed.`);
+                toast.info(`Fetched ${data.results.length} matters. ${data.errors.length} failed.`);
+            } else {
+                toast.success(`Successfully fetched fees for ${data.results.length} matters.`);
             }
         }
     } catch (error) {
         console.error('Error fetching all fees:', error);
-        alert('Failed to fetch fees. Please try again.');
+        toast.error('Failed to fetch fees. Please try again.');
     } finally {
         fetchAllBtn.disabled = false;
         fetchAllBtn.innerHTML = 'Fetch All Fees';
