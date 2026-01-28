@@ -10,10 +10,21 @@ Fee referral tracking system for Maclarens law firm. Tracks matters originating 
 
 ```bash
 npm install              # Install dependencies
-npm run dev              # Start dev server (or: netlify dev)
+npm run dev              # Start local dev server (recommended)
+npm run dev:netlify      # Start Netlify dev server (alternative)
 ```
 
-Dev server runs on port 8888. Requires Netlify CLI: `npm install -g netlify-cli`
+**Local dev server** (recommended):
+- Runs on port 8888 (configurable via PORT env var)
+- Uses custom Express server (`server.js`)
+- Faster and simpler than Netlify CLI
+- Loads env vars from `.env` file
+- See `LOCAL_DEV.md` for setup instructions
+
+**Netlify dev server** (alternative):
+- Requires Netlify CLI: `npm install -g netlify-cli`
+- More authentic to production environment
+- Slower to start, may have dependency issues
 
 No test or lint commands are configured.
 
