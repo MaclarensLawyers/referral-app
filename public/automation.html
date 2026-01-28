@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automation Monitor | Maclarens</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <script>
+        // Auth0 configuration
+        window.auth0Config = {
+            domain: '__AUTH0_DOMAIN__',
+            clientId: '__AUTH0_CLIENT_ID__',
+            audience: '__AUTH0_AUDIENCE__'
+        };
+    </script>
+    <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
+    <style>
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--color-bg);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--color-text);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--color-text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-card.pending { border-left: 4px solid #f59e0b; }
+        .stat-card.processing { border-left: 4px solid #3b82f6; }
+        .stat-card.completed { border-left: 4px solid #10b981; }
+        .stat-card.failed { border-left: 4px solid #ef4444; }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-badge.pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-badge.processing {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .status-badge.completed {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-badge.failed {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .log-entry {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .log-icon.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .log-icon.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .log-icon.warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .log-content {
+            flex: 1;
+        }
+
+        .log-matter {
+            font-weight: 600;
+            color: var(--color-text);
+            margin-bottom: 0.25rem;
+        }
+
+        .log-message {
+            font-size: 0.875rem;
+            color: var(--color-text-muted);
+            margin-bottom: 0.25rem;
+        }
+
+        .log-time {
+            font-size: 0.75rem;
+            color: var(--color-text-muted);
+        }
+
+        .jobs-table {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-inner">
+            <a href="/" class="logo">
+                <div class="logo-mark"></div>
+                <div class="logo-text">
+                    <div class="logo-firm">Maclarens Lawyers</div>
+                    <div class="logo-app">Referral Tracking</div>
+                </div>
+            </a>
+            <nav>
+                <a href="/">Matters</a>
+                <a href="/add-client.html">Manage Referrals</a>
+                <a href="/automation.html" class="active">Automation</a>
+                <a href="/settings.html">Settings</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="page-header">
+            <h1>Automation Monitor</h1>
+            <p>Track origination fee automation jobs and view logs.</p>
+        </div>
+
+        <!-- Statistics -->
+        <div class="stats-grid">
+            <div class="stat-card pending">
+                <div class="stat-value" id="stat-pending">-</div>
+                <div class="stat-label">Pending</div>
+            </div>
+            <div class="stat-card processing">
+                <div class="stat-value" id="stat-processing">-</div>
+                <div class="stat-label">Processing</div>
+            </div>
+            <div class="stat-card completed">
+                <div class="stat-value" id="stat-completed">-</div>
+                <div class="stat-label">Completed</div>
+            </div>
+            <div class="stat-card failed">
+                <div class="stat-value" id="stat-failed">-</div>
+                <div class="stat-label">Failed</div>
+            </div>
+        </div>
+
+        <!-- Recent Jobs -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Recent Automation Jobs</h2>
+                <button class="btn btn-sm btn-secondary" onclick="loadData()">Refresh</button>
+            </div>
+
+            <div id="jobs-loading" style="display: none; text-align: center; padding: 2rem; color: var(--color-text-muted);">
+                Loading jobs...
+            </div>
+
+            <div id="jobs-table" style="display: none;">
+                <table class="jobs-table">
+                    <thead>
+                        <tr>
+                            <th>Matter ID</th>
+                            <th>Client</th>
+                            <th>Referrer</th>
+                            <th>Percentage</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody id="jobs-table-body">
+                    </tbody>
+                </table>
+            </div>
+
+            <div id="jobs-empty" style="display: none; text-align: center; padding: 2rem; color: var(--color-text-muted);">
+                No automation jobs yet.
+            </div>
+        </div>
+
+        <!-- Activity Log -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Activity Log</h2>
+            </div>
+
+            <div id="logs-loading" style="display: none; text-align: center; padding: 2rem; color: var(--color-text-muted);">
+                Loading logs...
+            </div>
+
+            <div id="logs-list" style="display: none;">
+                <!-- Log entries will be inserted here -->
+            </div>
+
+            <div id="logs-empty" style="display: none; text-align: center; padding: 2rem; color: var(--color-text-muted);">
+                No log entries yet.
+            </div>
+        </div>
+    </main>
+
+    <script src="/js/toast.js"></script>
+    <script src="/js/auth.js"></script>
+    <script>
+        // Load automation data
+        async function loadData() {
+            await Promise.all([loadStats(), loadJobs(), loadLogs()]);
+        }
+
+        // Load statistics
+        async function loadStats() {
+            try {
+                const headers = await auth.getAuthHeaders();
+                const response = await fetch('/api/automation-logs', { headers });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load stats');
+                }
+
+                const data = await response.json();
+                const stats = data.stats;
+
+                document.getElementById('stat-pending').textContent = stats.pending || 0;
+                document.getElementById('stat-processing').textContent = stats.processing || 0;
+                document.getElementById('stat-completed').textContent = stats.completed || 0;
+                document.getElementById('stat-failed').textContent = stats.failed || 0;
+
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        // Load recent jobs
+        async function loadJobs() {
+            const loadingEl = document.getElementById('jobs-loading');
+            const tableEl = document.getElementById('jobs-table');
+            const emptyEl = document.getElementById('jobs-empty');
+            const tableBodyEl = document.getElementById('jobs-table-body');
+
+            loadingEl.style.display = 'block';
+            tableEl.style.display = 'none';
+            emptyEl.style.display = 'none';
+
+            try {
+                const headers = await auth.getAuthHeaders();
+                const response = await fetch('/api/automation-logs', { headers });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load jobs');
+                }
+
+                const data = await response.json();
+                const jobs = data.recent_jobs || [];
+
+                loadingEl.style.display = 'none';
+
+                if (jobs.length === 0) {
+                    emptyEl.style.display = 'block';
+                    return;
+                }
+
+                tableBodyEl.innerHTML = jobs.map(job => {
+                    const created = new Date(job.created_at);
+                    const completed = job.completed_at ? new Date(job.completed_at) : null;
+                    const duration = completed ? Math.round((completed - created) / 1000) : '-';
+
+                    return `
+                        <tr>
+                            <td class="cell-mono">${job.matter_id}</td>
+                            <td>${job.client_name || '<span class="cell-muted">—</span>'}</td>
+                            <td>${job.referrer_name || '<span class="cell-muted">—</span>'}</td>
+                            <td>${job.origination_percentage}%</td>
+                            <td><span class="status-badge ${job.status}">${job.status}</span></td>
+                            <td>${created.toLocaleDateString()} ${created.toLocaleTimeString()}</td>
+                            <td>${duration !== '-' ? duration + 's' : '-'}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                tableEl.style.display = 'block';
+
+            } catch (error) {
+                console.error('Error loading jobs:', error);
+                loadingEl.style.display = 'none';
+                emptyEl.textContent = 'Failed to load jobs.';
+                emptyEl.style.display = 'block';
+            }
+        }
+
+        // Load activity logs
+        async function loadLogs() {
+            const loadingEl = document.getElementById('logs-loading');
+            const listEl = document.getElementById('logs-list');
+            const emptyEl = document.getElementById('logs-empty');
+
+            loadingEl.style.display = 'block';
+            listEl.style.display = 'none';
+            emptyEl.style.display = 'none';
+
+            try {
+                const headers = await auth.getAuthHeaders();
+                const response = await fetch('/api/automation-logs?limit=20', { headers });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load logs');
+                }
+
+                const data = await response.json();
+                const logs = data.logs || [];
+
+                loadingEl.style.display = 'none';
+
+                if (logs.length === 0) {
+                    emptyEl.style.display = 'block';
+                    return;
+                }
+
+                listEl.innerHTML = logs.map(log => {
+                    const iconClass = log.status === 'success' ? 'success' : log.status === 'error' ? 'error' : 'warning';
+                    const icon = log.status === 'success' ? '✓' : log.status === 'error' ? '✗' : '!';
+                    const time = new Date(log.created_at);
+
+                    return `
+                        <div class="log-entry">
+                            <div class="log-icon ${iconClass}">${icon}</div>
+                            <div class="log-content">
+                                <div class="log-matter">Matter ${log.matter_id}</div>
+                                <div class="log-message">${log.message || log.action}</div>
+                                ${log.error_details ? `<div class="log-message" style="color: var(--color-error);">${log.error_details}</div>` : ''}
+                                <div class="log-time">${time.toLocaleDateString()} ${time.toLocaleTimeString()}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                listEl.style.display = 'block';
+
+            } catch (error) {
+                console.error('Error loading logs:', error);
+                loadingEl.style.display = 'none';
+                emptyEl.textContent = 'Failed to load logs.';
+                emptyEl.style.display = 'block';
+            }
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadData, 30000);
+
+        // Require authentication
+        auth.ready.then(() => {
+            if (!auth.getUser()) {
+                auth.login();
+            } else {
+                auth.updateHeaderWithUser();
+                loadData();
+            }
+        });
+    </script>
+</body>
+</html>
