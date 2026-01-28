@@ -11,7 +11,11 @@
       "Bash(netstat:*)",
       "Bash(findstr:*)",
       "Bash(taskkill:*)",
-      "Bash(cmd.exe /c \"taskkill /F /PID 42628\")"
+      "Bash(cmd.exe /c \"taskkill /F /PID 42628\")",
+      "Bash(dir:*)",
+      "Bash(npm run dev:setup:*)",
+      "Bash(node restore-placeholders.js:*)",
+      "Bash(node:*)"
     ]
   }
 }

@@ -44,10 +44,41 @@
                 </div>
             </div>
             <div class="controls-right">
+                <button id="download-csv-btn" class="btn" onclick="downloadCSV()" disabled>
+                    Download CSV
+                </button>
                 <button id="fetch-all-btn" class="btn btn-primary" disabled>
                     Fetch All Fees
                 </button>
             </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="card" style="margin-bottom: 1.5rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; align-items: end;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="filter-referrer">Filter by Referrer</label>
+                    <select id="filter-referrer" onchange="selectedReferrer = this.value; renderTable();">
+                        <option value="">All Referrers</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="filter-fee-earner">Filter by Fee Earner</label>
+                    <select id="filter-fee-earner" onchange="selectedFeeEarner = this.value; renderTable();">
+                        <option value="">All Fee Earners</option>
+                    </select>
+                </div>
+                <div>
+                    <button class="btn btn-sm" onclick="selectedReferrer = ''; selectedFeeEarner = ''; renderTable();" style="width: 100%;">
+                        Clear Filters
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Record count -->
+        <div style="margin-bottom: 0.75rem; color: var(--color-text-muted); font-size: 0.875rem;">
+            <span id="record-count">Loading...</span>
         </div>
 
         <!-- Loading indicator -->
@@ -72,6 +103,10 @@
                 <tbody id="table-body">
                 </tbody>
             </table>
+        </div>
+
+        <!-- Pagination -->
+        <div id="pagination" style="display: none; justify-content: center; align-items: center; gap: 0.5rem; margin-top: 1.5rem;">
         </div>
 
         <!-- Empty state -->
