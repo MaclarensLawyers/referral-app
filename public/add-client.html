@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Add Referred Client | Maclarens</title>
+    <title>Manage Referrals | Maclarens</title>
     <link rel="stylesheet" href="/css/styles.css">
     <script>
         // Auth0 configuration - these values should be set via environment or build process
@@ -15,9 +15,27 @@
     </script>
     <script src="https://cdn.auth0.com/js/auth0-spa-js/2.0/auth0-spa-js.production.js"></script>
     <style>
+        .two-column-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-top: 1.5rem;
+        }
+
+        @media (max-width: 1024px) {
+            .two-column-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .form-row {
             display: grid;
             gap: 1rem;
+        }
+
+        .referrals-table-wrapper {
+            max-height: 500px;
+            overflow-y: auto;
         }
     </style>
 </head>
@@ -30,7 +48,7 @@
             </a>
             <nav>
                 <a href="/">Matters</a>
-                <a href="/add-client.html" class="active">Add Client</a>
+                <a href="/add-client.html" class="active">Manage Referrals</a>
                 <a href="/settings.html">Settings</a>
             </nav>
         </div>
@@ -38,8 +56,8 @@
 
     <main class="container">
         <div class="page-header">
-            <h1>Add Referred Client</h1>
-            <p>Register a new client as having been referred by a staff member. When matters are created for this client, the referrer will be tracked automatically.</p>
+            <h1>Manage Referrals</h1>
+            <p>Register new referred clients and view existing referrals.</p>
         </div>
 
         <!-- Alert messages -->
@@ -50,60 +68,7 @@
             <span id="error-message"></span>
         </div>
 
-        <div class="card">
-            <div class="card-header">
-                <h2>Client Registration Form</h2>
-                <p>This form saves to Zapier Tables, which is checked when new matters are created.</p>
-            </div>
-
-            <form id="client-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="client-participant-id">Client Participant ID *</label>
-                        <input
-                            type="text"
-                            id="client-participant-id"
-                            name="client_participant_id"
-                            placeholder="e.g., 12345"
-                            required
-                        >
-                        <p style="margin: 0.5rem 0 0 0; color: var(--color-text-secondary); font-size: 0.875rem;">
-                            Found in the Actionstep contact URL or details panel
-                        </p>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="client-name">Client Name *</label>
-                        <input
-                            type="text"
-                            id="client-name"
-                            name="client_name"
-                            placeholder="e.g., John Smith"
-                            required
-                        >
-                    </div>
-
-                    <div class="form-group">
-                        <label for="referrer-name">Referrer Name *</label>
-                        <input
-                            type="text"
-                            id="referrer-name"
-                            name="referrer_name"
-                            placeholder="e.g., Jane Doe"
-                            required
-                        >
-                        <p style="margin: 0.5rem 0 0 0; color: var(--color-text-secondary); font-size: 0.875rem;">
-                            The staff member who referred this client
-                        </p>
-                    </div>
-                </div>
-
-                <button type="submit" class="btn btn-primary" id="submit-btn">
-                    Submit Client
-                </button>
-            </form>
-        </div>
-
+        <!-- How to Find Participant ID -->
         <div class="card">
             <div class="card-header">
                 <h2>How to Find Client Participant ID</h2>
@@ -114,11 +79,143 @@
                 Alternatively, you can find it in the contact's details panel.
             </p>
         </div>
+
+        <!-- Two Column Layout -->
+        <div class="two-column-layout">
+            <!-- Left: Registration Form -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Register New Referral</h2>
+                    <p>Add a new referred client to track fee allocations.</p>
+                </div>
+
+                <form id="client-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="client-participant-id">Client Participant ID *</label>
+                            <input
+                                type="text"
+                                id="client-participant-id"
+                                name="client_participant_id"
+                                placeholder="e.g., 12345"
+                                required
+                            >
+                        </div>
+
+                        <div class="form-group">
+                            <label for="client-name">Client Name *</label>
+                            <input
+                                type="text"
+                                id="client-name"
+                                name="client_name"
+                                placeholder="e.g., John Smith"
+                                required
+                            >
+                        </div>
+
+                        <div class="form-group">
+                            <label for="referrer-name">Referrer Name *</label>
+                            <input
+                                type="text"
+                                id="referrer-name"
+                                name="referrer_name"
+                                placeholder="e.g., Jane Doe"
+                                required
+                            >
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary" id="submit-btn">
+                        Submit Client
+                    </button>
+                </form>
+            </div>
+
+            <!-- Right: Referrals List -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Referred Clients</h2>
+                    <p>Current list of clients registered as referrals.</p>
+                </div>
+
+                <div id="referrals-loading" style="display: none; text-align: center; padding: 2rem; color: var(--color-text-muted);">
+                    Loading...
+                </div>
+
+                <div id="referrals-table" class="referrals-table-wrapper" style="display: none;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Client Participant ID</th>
+                                <th>Client Name</th>
+                                <th>Referrer</th>
+                            </tr>
+                        </thead>
+                        <tbody id="referrals-table-body">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="referrals-empty" style="display: none; text-align: center; padding: 2rem; color: var(--color-text-muted);">
+                    No referred clients yet.
+                </div>
+            </div>
+        </div>
     </main>
 
     <script src="/js/toast.js"></script>
     <script src="/js/auth.js"></script>
     <script>
+        // Load referrals list
+        async function loadReferrals() {
+            const loadingEl = document.getElementById('referrals-loading');
+            const tableEl = document.getElementById('referrals-table');
+            const emptyEl = document.getElementById('referrals-empty');
+            const tableBodyEl = document.getElementById('referrals-table-body');
+
+            loadingEl.style.display = 'block';
+            tableEl.style.display = 'none';
+            emptyEl.style.display = 'none';
+
+            try {
+                const headers = await auth.getAuthHeaders();
+                const response = await fetch('/api/get-matters', { headers });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load referrals');
+                }
+
+                const data = await response.json();
+                const matters = data.matters || [];
+
+                loadingEl.style.display = 'none';
+
+                if (matters.length === 0) {
+                    emptyEl.style.display = 'block';
+                    return;
+                }
+
+                // Create a unique list based on client participant ID
+                // Since we don't have client_participant_id in the matters table,
+                // we'll just show matter-based data
+                tableBodyEl.innerHTML = matters.map(matter => `
+                    <tr>
+                        <td class="cell-mono">${matter.matter_id}</td>
+                        <td>${matter.matter_name || '<span class="cell-muted">—</span>'}</td>
+                        <td>${matter.referrer_name}</td>
+                    </tr>
+                `).join('');
+
+                tableEl.style.display = 'block';
+
+            } catch (error) {
+                console.error('Error loading referrals:', error);
+                loadingEl.style.display = 'none';
+                emptyEl.textContent = 'Failed to load referrals.';
+                emptyEl.style.display = 'block';
+            }
+        }
+
         // Handle form submission
         document.getElementById('client-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -153,14 +250,14 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    // Show success message
-                    successAlert.style.display = 'block';
+                    // Show success message with toast
+                    toast.success('Client submitted successfully!');
 
                     // Reset form
                     document.getElementById('client-form').reset();
 
-                    // Scroll to top to show success message
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    // Reload referrals list
+                    setTimeout(() => loadReferrals(), 1000);
                 } else {
                     // Show error message
                     errorMessage.textContent = data.error || 'Failed to submit client';
@@ -185,6 +282,7 @@
                 auth.login();
             } else {
                 auth.updateHeaderWithUser();
+                loadReferrals();
             }
         });
     </script>
