@@ -85,6 +85,15 @@ AUTH0_CONNECTION          # Auth0 database connection name (default: Username-Pa
 
 Frontend Auth0 configuration is set via `window.auth0Config` in HTML files. Replace placeholder values (`__AUTH0_DOMAIN__`, `__AUTH0_CLIENT_ID__`, `__AUTH0_AUDIENCE__`) with actual values during build or deployment.
 
+## Auth0 Setup Requirements
+
+**IMPORTANT:** For user management to work, you must create an `admin` role in Auth0:
+
+1. Go to Auth0 Dashboard → User Management → Roles
+2. Create a new role named `admin` (exact name, lowercase)
+3. Add this role to your initial admin user(s)
+4. The role is used to control access to settings and user management features
+
 ## Database Tables
 
 - `settings` - Key-value store (OAuth tokens, referral_percentage)

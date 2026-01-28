@@ -281,19 +281,39 @@ td {
 
 .fee-breakdown .fee-earner {
     display: flex;
-    justify-content: space-between;
     gap: 1rem;
+}
+
+.fee-breakdown .fee-earner span:first-child {
+    flex: 1;
+    min-width: 0;
+}
+
+.fee-breakdown .fee-earner span:last-child {
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    text-align: right;
 }
 
 .fee-breakdown .fee-referrer {
     display: flex;
-    justify-content: space-between;
     gap: 1rem;
     padding-top: 0.5rem;
     margin-top: 0.5rem;
     border-top: 1px dashed var(--color-border);
     color: var(--color-accent);
     font-weight: 500;
+}
+
+.fee-breakdown .fee-referrer span:first-child {
+    flex: 1;
+    min-width: 0;
+}
+
+.fee-breakdown .fee-referrer span:last-child {
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    text-align: right;
 }
 
 /* Empty state */
@@ -352,9 +372,10 @@ label {
 
 input[type="text"],
 input[type="number"],
-input[type="email"] {
+input[type="email"],
+input[type="url"] {
     width: 100%;
-    max-width: 300px;
+    max-width: 500px;
     padding: 0.625rem 0.75rem;
     font-family: var(--font-sans);
     font-size: 0.875rem;

@@ -212,31 +212,66 @@
         </div>
 
         <!-- User Management (Admin Only) -->
-        <div id="admin-section" class="card" style="display: none;">
-            <div class="card-header">
-                <h2>User Management</h2>
-                <p>Invite new users to the system. Only administrators can access this section.</p>
-            </div>
-
-            <form id="invite-form">
-                <div class="form-group">
-                    <label for="invite-email">Email Address</label>
-                    <input
-                        type="email"
-                        id="invite-email"
-                        name="email"
-                        placeholder="user@example.com"
-                        required
-                    >
+        <div id="admin-section" style="display: none;">
+            <!-- Invite New User -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Invite New User</h2>
+                    <p>Send an invitation to a new user to join the system.</p>
                 </div>
-                <button type="submit" class="btn btn-primary" id="invite-btn">Send Invitation</button>
-            </form>
 
-            <div id="invite-success" class="alert alert-success" style="display: none; margin-top: 1rem;">
-                Invitation sent successfully!
+                <form id="invite-form">
+                    <div class="form-group">
+                        <label for="invite-email">Email Address</label>
+                        <input
+                            type="email"
+                            id="invite-email"
+                            name="email"
+                            placeholder="user@example.com"
+                            required
+                        >
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="invite-btn">Send Invitation</button>
+                </form>
+
+                <div id="invite-success" class="alert alert-success" style="display: none; margin-top: 1rem;">
+                    Invitation sent successfully!
+                </div>
+                <div id="invite-error" class="alert alert-error" style="display: none; margin-top: 1rem;">
+                    <span id="invite-error-message"></span>
+                </div>
             </div>
-            <div id="invite-error" class="alert alert-error" style="display: none; margin-top: 1rem;">
-                <span id="invite-error-message"></span>
+
+            <!-- Manage Existing Users -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>Manage Users</h2>
+                    <p>View all users and manage their permissions.</p>
+                </div>
+
+                <div id="users-loading" style="display: none; text-align: center; padding: 2rem; color: var(--color-text-muted);">
+                    Loading users...
+                </div>
+
+                <div id="users-table-wrapper" class="table-wrapper" style="display: none;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Status</th>
+                                <th>Role</th>
+                                <th>Last Login</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-table-body">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="users-empty" style="display: none; text-align: center; padding: 2rem; color: var(--color-text-muted);">
+                    No users found.
+                </div>
             </div>
         </div>
     </main>
@@ -461,6 +496,8 @@
                     successEl.textContent = `Invitation sent to ${email}`;
                     successEl.style.display = 'block';
                     document.getElementById('invite-email').value = '';
+                    // Reload users list to show new user
+                    setTimeout(() => loadUsers(), 1000);
                 } else {
                     document.getElementById('invite-error-message').textContent =
                         data.error || 'Failed to send invitation';
@@ -488,6 +525,180 @@
             });
         }
 
+        // Load and render users list
+        async function loadUsers() {
+            const loadingEl = document.getElementById('users-loading');
+            const tableWrapperEl = document.getElementById('users-table-wrapper');
+            const emptyEl = document.getElementById('users-empty');
+            const tableBodyEl = document.getElementById('users-table-body');
+
+            loadingEl.style.display = 'block';
+            tableWrapperEl.style.display = 'none';
+            emptyEl.style.display = 'none';
+
+            try {
+                const headers = await auth.getAuthHeaders();
+                const response = await fetch('/api/manage-users', { headers });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load users');
+                }
+
+                const data = await response.json();
+                const users = data.users;
+
+                loadingEl.style.display = 'none';
+
+                if (users.length === 0) {
+                    emptyEl.style.display = 'block';
+                    return;
+                }
+
+                // Get current user ID to prevent self-modification
+                const currentUser = auth.getUser();
+
+                // Render users table
+                tableBodyEl.innerHTML = users.map(user => {
+                    const isCurrentUser = user.user_id === currentUser.sub;
+                    const lastLogin = user.last_login ? new Date(user.last_login).toLocaleDateString('en-AU', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric'
+                    }) : 'Never';
+
+                    const statusBadge = user.blocked
+                        ? '<span class="badge badge-error">Blocked</span>'
+                        : user.email_verified
+                            ? '<span class="badge badge-success">Active</span>'
+                            : '<span class="badge badge-warning">Pending</span>';
+
+                    const roleBadge = user.is_admin
+                        ? '<span class="badge-admin">Admin</span>'
+                        : '<span style="color: var(--color-text-muted); font-size: 0.875rem;">User</span>';
+
+                    const actions = isCurrentUser
+                        ? '<span style="color: var(--color-text-muted); font-size: 0.875rem;">You</span>'
+                        : `
+                            ${user.is_admin
+                                ? `<button class="btn btn-sm" onclick="removeAdminRole('${user.user_id}', '${user.email}')">Remove Admin</button>`
+                                : `<button class="btn btn-sm btn-primary" onclick="makeUserAdmin('${user.user_id}', '${user.email}')">Make Admin</button>`
+                            }
+                            <button class="btn btn-sm" style="margin-left: 0.5rem; border-color: var(--color-error); color: var(--color-error);" onclick="deleteUserAccount('${user.user_id}', '${user.email}')">Delete</button>
+                        `;
+
+                    return `
+                        <tr>
+                            <td>${user.email}</td>
+                            <td>${statusBadge}</td>
+                            <td>${roleBadge}</td>
+                            <td class="cell-muted">${lastLogin}</td>
+                            <td style="white-space: nowrap;">${actions}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+                tableWrapperEl.style.display = 'block';
+
+            } catch (error) {
+                console.error('Error loading users:', error);
+                loadingEl.style.display = 'none';
+                emptyEl.textContent = 'Failed to load users.';
+                emptyEl.style.display = 'block';
+            }
+        }
+
+        // Make user admin
+        async function makeUserAdmin(userId, email) {
+            if (!confirm(`Make ${email} an administrator? They will have full access to all settings and user management.`)) {
+                return;
+            }
+
+            try {
+                const headers = await auth.getAuthHeaders();
+                const response = await fetch('/api/manage-users', {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({
+                        user_id: userId,
+                        action: 'make_admin',
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    toast.success(`${email} is now an administrator`);
+                    loadUsers();
+                } else {
+                    toast.error(data.error || 'Failed to update user');
+                }
+            } catch (error) {
+                console.error('Error making user admin:', error);
+                toast.error('Failed to update user');
+            }
+        }
+
+        // Remove admin role
+        async function removeAdminRole(userId, email) {
+            if (!confirm(`Remove administrator privileges from ${email}?`)) {
+                return;
+            }
+
+            try {
+                const headers = await auth.getAuthHeaders();
+                const response = await fetch('/api/manage-users', {
+                    method: 'PATCH',
+                    headers,
+                    body: JSON.stringify({
+                        user_id: userId,
+                        action: 'remove_admin',
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    toast.success(`Removed admin privileges from ${email}`);
+                    loadUsers();
+                } else {
+                    toast.error(data.error || 'Failed to update user');
+                }
+            } catch (error) {
+                console.error('Error removing admin:', error);
+                toast.error('Failed to update user');
+            }
+        }
+
+        // Delete user
+        async function deleteUserAccount(userId, email) {
+            if (!confirm(`Delete user ${email}? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const headers = await auth.getAuthHeaders();
+                const response = await fetch('/api/manage-users', {
+                    method: 'DELETE',
+                    headers,
+                    body: JSON.stringify({
+                        user_id: userId,
+                    }),
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    toast.success(`Deleted user ${email}`);
+                    loadUsers();
+                } else {
+                    toast.error(data.error || 'Failed to delete user');
+                }
+            } catch (error) {
+                console.error('Error deleting user:', error);
+                toast.error('Failed to delete user');
+            }
+        }
+
         // Initialize after auth is ready
         auth.ready.then(() => {
             if (!auth.getUser()) {
@@ -500,6 +711,7 @@
             // Show admin section if user is admin
             if (auth.isAdmin()) {
                 document.getElementById('admin-section').style.display = 'block';
+                loadUsers();
             }
 
             loadSettings();
