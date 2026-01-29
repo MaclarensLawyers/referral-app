@@ -1,6 +1,7 @@
+# Netlify configuration for automation webhook only
+# No build process needed - just serverless functions
+
 [build]
-  command = "npm run build"
-  publish = "public"
   functions = "netlify/functions"
 
 [functions]
@@ -10,8 +11,3 @@
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
-
-[dev]
-  port = 8888
-  publish = "public"
-  functions = "netlify/functions"
