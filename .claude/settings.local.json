@@ -15,7 +15,8 @@
       "Bash(dir:*)",
       "Bash(npm run dev:setup:*)",
       "Bash(node restore-placeholders.js:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(ls:*)"
     ]
   }
 }

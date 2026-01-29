@@ -1,18 +1,11 @@
 {
-  "name": "referral-app",
-  "version": "1.0.0",
-  "description": "Fee referral tracking for Maclarens",
+  "name": "actionstep-automation",
+  "version": "2.0.0",
+  "description": "Actionstep origination fee automation system",
   "scripts": {
-    "dev": "node server.js",
-    "dev:netlify": "netlify dev",
-    "dev:setup": "node inject-auth0.js && node server.js",
-    "build": "node scripts/inject-env.js"
+    "test": "echo 'No tests configured'"
   },
   "dependencies": {
-    "@neondatabase/serverless": "^0.9.0",
-    "dotenv": "^16.4.5",
-    "express": "^4.18.2",
-    "jsonwebtoken": "^9.0.2",
-    "jwks-rsa": "^3.1.0"
+    "@neondatabase/serverless": "^0.9.0"
   }
 }

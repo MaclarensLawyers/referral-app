@@ -1,114 +1,169 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with code in this repository.
 
 ## Project Overview
 
-Fee referral tracking system for Maclarens law firm. Tracks matters originating from staff referrals and calculates fee splits between fee earners and referrers.
-
-## Development Commands
-
-```bash
-npm install              # Install dependencies
-npm run dev              # Start local dev server (recommended)
-npm run dev:netlify      # Start Netlify dev server (alternative)
-```
-
-**Local dev server** (recommended):
-- Runs on port 8888 (configurable via PORT env var)
-- Uses custom Express server (`server.js`)
-- Faster and simpler than Netlify CLI
-- Loads env vars from `.env` file
-- See `LOCAL_DEV.md` for setup instructions
-
-**Netlify dev server** (alternative):
-- Requires Netlify CLI: `npm install -g netlify-cli`
-- More authentic to production environment
-- Slower to start, may have dependency issues
-
-No test or lint commands are configured.
+Actionstep origination fee automation system. Automatically sets origination fees in Actionstep when new matters are created for referred clients.
 
 ## Architecture
 
-**Stack:** Vanilla JS frontend, Netlify Functions backend, Neon PostgreSQL database, Auth0 authentication
+**Simplified webhook-based system:**
+1. Zapier maintains referred client list (Zapier Tables or Google Sheets)
+2. Zapier detects new matters in Actionstep
+3. Zapier POSTs to Netlify webhook to create automation job
+4. Puppeteer worker polls database and processes jobs
+5. Worker logs into Actionstep and sets origination fee
+
+## Project Structure
 
 ```
-public/                     # Static frontend (HTML/CSS/JS)
-├── index.html              # Main dashboard (protected)
-├── add-client.html         # Client registration (protected)
-├── settings.html           # Settings & admin features (protected, admin-only for some features)
-├── login.html              # Login page with Auth0
-├── callback.html           # Auth0 callback handler
-├── js/
-│   ├── app.js              # Dashboard logic
-│   └── auth.js             # Frontend auth utilities (Auth0 SPA SDK)
-└── css/styles.css          # Styling
+netlify/functions/           # Serverless API
+└── set-origination-fee.js   # Zapier webhook endpoint (creates jobs)
 
-netlify/functions/          # Serverless API endpoints
-├── lib/
-│   ├── actionstep.js       # Actionstep API client & OAuth token management
-│   ├── auth.js             # JWT verification middleware
-│   └── db.js               # Neon database connection
-├── auth-callback.js        # Actionstep OAuth callback handler
-├── fetch-fees.js           # Fee calculation (requires auth)
-├── get-matters.js          # List referred matters (requires auth)
-├── invite-user.js          # Invite new users (requires admin)
-├── settings.js             # Settings CRUD (GET: auth, POST: admin)
-└── webhook.js              # Zapier webhook receiver (public)
+automation-worker/           # Puppeteer automation bot (runs separately)
+├── actionstep-bot.js        # Bot class for Actionstep automation
+├── job-processor.js         # Job queue processor
+├── index.js                 # Worker entry point
+├── test-*.js                # Test scripts
+├── debug-*.js               # Debug scripts
+└── README.md                # Worker setup guide
+
+schema-automation.sql        # Database schema (automation_jobs, automation_logs)
+
+Documentation:
+├── README.md                # Quick start guide
+├── AUTOMATION_SYSTEM.md     # Complete system documentation
+└── ZAPIER_SETUP.md          # Zapier workflow setup
 ```
 
-**API Routes:** All `/api/*` requests route to `/.netlify/functions/:splat` via netlify.toml
+## No Frontend
 
-## Data Flow
+This app has no user interface. All interaction happens via:
+- Zapier interface forms (for managing referrals)
+- Zapier workflow (for automation triggering)
+- Direct database queries (for monitoring)
 
-1. Staff submits referred client via Zapier Interface form → Zapier Tables
-2. New matter in Actionstep → Zapier workflow checks Tables → POSTs to `/api/webhook`
-3. App stores matter in database
-4. On demand: `/api/fetch-fees` calls Actionstep API → calculates splits → caches results
+## Key Components
 
-## Key Patterns
+### Netlify Function
 
-**User Authentication:** Auth0 with invite-only registration. Admin role required for settings changes and inviting users. JWT tokens verified via `lib/auth.js` middleware using JWKS. Frontend uses Auth0 SPA SDK via `auth.js` for token management and `auth.getAuthHeaders()` for API calls.
+**Single endpoint:** `/api/set-origination-fee`
+- Public webhook for Zapier
+- Accepts: matter_id, client_participant_id, referrer_name, percentage
+- Creates job in `automation_jobs` table
+- No authentication (safe because it only queues jobs, doesn't execute)
 
-**Actionstep OAuth:** Tokens stored in `settings` table, auto-refreshed with 5-minute buffer before expiry. Check `actionstep.js:getAccessToken()` for token management.
+**Routing:** netlify.toml routes `/api/*` to `/.netlify/functions/:splat`
 
-**Fee Calculation:** Time entries aggregated by fee earner, referrer gets configurable percentage (default 10%), remaining split proportionally among fee earners.
+### Database
 
-**Database:** Uses Neon serverless driver with connection pooling. Parameterized queries via template literals. UPSERT pattern for idempotent operations.
+**Neon PostgreSQL with serverless driver:**
+- `automation_jobs` - Job queue (pending/processing/completed/failed)
+- `automation_logs` - Activity history
+
+**No user tables, no Auth0, no original fee calculation tables**
+
+### Automation Worker
+
+**Puppeteer-based Node.js worker (runs separately from Netlify):**
+- Polls database every 30 seconds for pending jobs
+- Logs into Actionstep with automatic TOTP 2FA
+- Navigates to matter billing page
+- Sets origination fee using exact staff name
+- Handles session timeouts and browser crashes
+- Retries failed jobs up to 3 times
+- Takes screenshots for debugging
+
+**Deployment:** Local for testing, DigitalOcean for production
 
 ## Environment Variables
 
+### Netlify
 ```
 DATABASE_URL              # Neon PostgreSQL connection string
-ACTIONSTEP_CLIENT_ID      # OAuth client ID
-ACTIONSTEP_CLIENT_SECRET  # OAuth client secret
-ACTIONSTEP_API_URL        # e.g., https://api.actionstepstaging.com/api/rest
-ACTIONSTEP_AUTH_DOMAIN    # e.g., go.actionstepstaging.com (default: go.actionstep.com)
-APP_URL                   # Netlify app URL for OAuth callback
-
-# Auth0 Configuration
-AUTH0_DOMAIN              # Auth0 tenant domain (e.g., your-tenant.auth0.com)
-AUTH0_AUDIENCE            # Auth0 API identifier/audience
-AUTH0_MGMT_CLIENT_ID      # Auth0 Management API client ID (for user invitations)
-AUTH0_MGMT_CLIENT_SECRET  # Auth0 Management API client secret
-AUTH0_CONNECTION          # Auth0 database connection name (default: Username-Password-Authentication)
 ```
 
-Frontend Auth0 configuration is set via `window.auth0Config` in HTML files. Replace placeholder values (`__AUTH0_DOMAIN__`, `__AUTH0_CLIENT_ID__`, `__AUTH0_AUDIENCE__`) with actual values during build or deployment.
+### Automation Worker (.env file)
+```
+DATABASE_URL              # Neon PostgreSQL connection string
+ACTIONSTEP_USERNAME       # Actionstep login email
+ACTIONSTEP_PASSWORD       # Actionstep password
+ACTIONSTEP_TOTP_SECRET    # TOTP secret for 2FA
+ACTIONSTEP_URL           # e.g., https://go.actionstep.com
+POLL_INTERVAL            # Seconds between polls (default 30)
+HEADLESS                 # true for production, false for debugging
+```
 
-## Auth0 Setup Requirements
+## Development Workflow
 
-**IMPORTANT:** For user management to work, you must create an `admin` role in Auth0:
+**No local dev server needed.** The only code that runs is:
+1. Netlify Function (deployed automatically on git push)
+2. Automation Worker (run locally or on DigitalOcean)
 
-1. Go to Auth0 Dashboard → User Management → Roles
-2. Create a new role named `admin` (exact name, lowercase)
-3. Add this role to your initial admin user(s)
-4. The role is used to control access to settings and user management features
+**Testing:**
+```bash
+cd automation-worker
+npm install
+cp .env.example .env
+# Edit .env
+node test-setup.js           # Verify configuration
+node test-automation.js MATTER_ID "REFERRER_NAME" PERCENTAGE
+npm start                    # Run worker
+```
 
-## Database Tables
+**No build process, no compilation, no frontend bundling.**
 
-- `settings` - Key-value store (OAuth tokens, referral_percentage)
-- `referred_matters` - Tracked matters (matter_id, matter_name, referrer_name)
-- `fee_snapshots` - Cached fee calculations (JSONB fee_data)
+## Critical Implementation Details
 
-Schema in `schema.sql` - run manually in Neon SQL editor (no migration framework).
+### Referrer Name Format
+Must match EXACTLY as in Actionstep dropdown:
+- ✅ "Aboud, Deane Nicole (Staff)"
+- ❌ "Deane Aboud"
+- ❌ "Aboud, Deane Nicole"
+
+Use `debug-billing-page.js` to see exact dropdown options.
+
+### Session Management
+Worker handles:
+- Automatic TOTP 2FA authentication
+- Session timeout detection and re-login
+- Browser crash recovery
+
+### Job Processing
+- One job at a time (configurable via MAX_CONCURRENT_JOBS)
+- Automatic retries on failure (max 3 attempts)
+- Screenshots saved to `automation-worker/screenshots/`
+
+## Dependencies
+
+**Netlify Function:**
+- `@neondatabase/serverless` - Database connection
+
+**Automation Worker:**
+- `puppeteer` - Browser automation
+- `@neondatabase/serverless` - Database connection
+- `otpauth` - TOTP 2FA code generation
+- `dotenv` - Environment variables
+
+## No Authentication
+
+The webhook endpoint is intentionally public. This is safe because:
+- It only creates jobs, doesn't execute them
+- Worker requires Actionstep credentials to actually set fees
+- Job data is non-sensitive (IDs and percentages only)
+
+## Monitoring
+
+**Database queries:**
+```sql
+SELECT * FROM automation_jobs WHERE status = 'pending';
+SELECT * FROM automation_logs ORDER BY created_at DESC LIMIT 20;
+SELECT status, COUNT(*) FROM automation_jobs GROUP BY status;
+```
+
+**Worker logs:** Console output shows all actions
+
+**Zapier history:** https://zapier.com/app/history
+
+**Screenshots:** `automation-worker/screenshots/` for debugging

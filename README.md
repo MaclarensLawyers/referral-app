@@ -1,142 +1,106 @@
-# Referral Tracking App
+# Actionstep Origination Fee Automation
 
-A fee referral tracking system for Maclarens law firm. Tracks matters originating from staff referrals and calculates fee splits between fee earners and referrers.
+Automated system for setting origination fees in Actionstep when new matters are created for referred clients.
 
-## Architecture
+## System Overview
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  INTAKE                                                         │
-│  Staff adds referred client via Zapier Interface form           │
-│  (embedded in app) → saved to Zapier Tables                     │
-│  [Client Participant ID | Client Name | Referrer Name]          │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│  MATTER CREATION                                                │
-│  New matter trigger fires in Zapier →                           │
-│  Checks Zapier Tables for client →                              │
-│  If match: POST to /api/webhook with matter ID + referrer       │
-└─────────────────────────────────────────────────────────────────┘
-                              ↓
-┌─────────────────────────────────────────────────────────────────┐
-│  THIS APP (Netlify + Neon)                                      │
-│  Stores matter → Fetches fees from Actionstep on demand →       │
-│  Calculates split → Displays for accounts team                  │
-└─────────────────────────────────────────────────────────────────┘
+**Simple Architecture:**
+- **Zapier** maintains referred client list and triggers automation
+- **Netlify Function** receives webhook and creates job in database
+- **Automation Worker** processes jobs and sets fees in Actionstep
+
+## Quick Start
+
+### 1. Database Setup
+
+Run the schema in your Neon database:
+```sql
+-- In Neon SQL Editor, paste contents of schema-automation.sql
 ```
 
-## Setup
+### 2. Zapier Setup
 
-### 1. Neon Database
+See [ZAPIER_SETUP.md](ZAPIER_SETUP.md) for detailed instructions:
+1. Create Zapier Table or Google Sheet with referred clients
+2. Set up workflow: Actionstep trigger → Lookup → POST webhook
+3. Test with sample matter
 
-1. Create a Neon project at [neon.tech](https://neon.tech)
-2. Copy the connection string (format: `postgresql://user:pass@host/db`)
-3. Run `schema.sql` in the Neon SQL editor to create tables
+### 3. Automation Worker Setup
 
-### 2. Actionstep API Application
-
-1. In Actionstep Admin, go to API → Applications
-2. Create a new application:
-   - Name: "Referral Tracker"
-   - Redirect URI: `https://your-netlify-app.netlify.app/api/auth-callback`
-3. Note the Client ID and Client Secret
-
-### 3. Netlify Deployment
-
-1. Push this repo to GitHub
-2. Connect to Netlify
-3. Set environment variables:
-   - `DATABASE_URL` - Neon connection string
-   - `ACTIONSTEP_CLIENT_ID` - From step 2
-   - `ACTIONSTEP_CLIENT_SECRET` - From step 2
-   - `ACTIONSTEP_API_URL` - e.g., `https://ap-southeast-2.actionstep.com/api/rest`
-   - `APP_URL` - Your Netlify app URL (e.g., `https://maclarens-referrals.netlify.app`)
-
-4. Deploy
-
-### 4. Zapier Setup
-
-#### Zapier Table
-
-Create a table with columns:
-- `client_participant_id` (Text)
-- `client_name` (Text)
-- `referrer_name` (Text)
-- `date_added` (Date)
-
-#### Zapier Interface Form
-
-1. Create a new Interface at interfaces.zapier.com
-2. Add a Form with fields matching the table
-3. Connect form submissions to add records to your table
-4. Copy the embed URL and update `add-client.html`
-
-#### Zapier Workflow
-
-```
-Trigger: New Matter (Actionstep)
-    ↓
-Action: Find Record (Zapier Tables)
-    - Table: Your referred clients table
-    - Search field: client_participant_id
-    - Search value: {{Primary Participants ID}}
-    ↓
-Filter: Only continue if record found
-    ↓
-Action: POST (Webhooks by Zapier)
-    - URL: https://your-app.netlify.app/api/webhook
-    - Payload Type: JSON
-    - Data:
-        matter_id: {{Action ID}}
-        matter_name: {{Action Name}}
-        referrer_name: {{referrer_name from lookup}}
-```
-
-### 5. Connect Actionstep
-
-1. Go to Settings in the app
-2. Click "Connect to Actionstep"
-3. Authorize the connection
-
-## Usage
-
-### For Intake Staff
-
-1. When registering a referred client, go to "Add Client"
-2. Fill in:
-   - Client Participant ID (from Actionstep URL)
-   - Client Name
-   - Referrer Name
-3. Submit the form
-
-### For Accounts
-
-1. Go to the main "Matters" page
-2. View referred matters for current month (or all time)
-3. Click "Fetch All Fees" to pull data from Actionstep
-4. View the fee allocation breakdown:
-   - Original fee earner amounts (adjusted for referral)
-   - Referrer allocation
-5. Use this information when allocating fees
-
-## API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/webhook` | POST | Receive new referred matters from Zapier |
-| `/api/get-matters` | GET | List referred matters (query: `period=current_month\|all`) |
-| `/api/fetch-fees` | POST | Fetch fee data from Actionstep for specified matters |
-| `/api/settings` | GET/POST | View or update app settings |
-| `/api/auth-callback` | GET | Handle Actionstep OAuth flow |
-
-## Local Development
-
+See [automation-worker/README.md](automation-worker/README.md) for detailed instructions:
 ```bash
+cd automation-worker
 npm install
-netlify dev
+cp .env.example .env
+# Edit .env with credentials
+npm start
 ```
 
-Requires Netlify CLI: `npm install -g netlify-cli`
+## Components
 
-You'll need to set environment variables locally via `.env` or `netlify env:set`.
+### Netlify Function
+- `/api/set-origination-fee` - Webhook endpoint for Zapier
+
+### Neon Database
+- `automation_jobs` - Job queue
+- `automation_logs` - Activity history
+
+### Automation Worker
+- Puppeteer-based bot that processes jobs
+- Automatic 2FA authentication
+- Session timeout handling
+- Browser crash recovery
+
+## Documentation
+
+- [AUTOMATION_SYSTEM.md](AUTOMATION_SYSTEM.md) - Complete system documentation
+- [ZAPIER_SETUP.md](ZAPIER_SETUP.md) - Zapier workflow setup guide
+- [automation-worker/README.md](automation-worker/README.md) - Worker setup and deployment
+- [automation-worker/QUICK_START.md](automation-worker/QUICK_START.md) - Quick reference guide
+
+## Environment Variables
+
+### Netlify (for webhook endpoint)
+```
+DATABASE_URL=your_neon_connection_string
+```
+
+### Automation Worker
+```
+DATABASE_URL=your_neon_connection_string
+ACTIONSTEP_USERNAME=your_email@example.com
+ACTIONSTEP_PASSWORD=your_password
+ACTIONSTEP_TOTP_SECRET=your_totp_secret
+ACTIONSTEP_URL=https://go.actionstep.com
+POLL_INTERVAL=30
+HEADLESS=true
+```
+
+## Deployment
+
+### Netlify Function
+Automatically deployed when you push to GitHub (already configured).
+
+### Automation Worker
+Deploy to DigitalOcean for 24/7 operation - see [automation-worker/README.md](automation-worker/README.md#migration-to-digitalocean).
+
+## Monitoring
+
+### Check job status in database
+```sql
+SELECT * FROM automation_jobs ORDER BY created_at DESC LIMIT 10;
+SELECT * FROM automation_logs ORDER BY created_at DESC LIMIT 20;
+```
+
+### Check worker logs
+The automation worker outputs detailed logs to console.
+
+### Check Zapier history
+https://zapier.com/app/history
+
+## Support
+
+For issues or questions:
+1. Check the documentation files listed above
+2. Review worker screenshots in `automation-worker/screenshots/`
+3. Check database logs for error messages
